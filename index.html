@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Kiber Stansiya OSINT</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0d1117;--card:#161b22;--card2:#1c2128;--border:#21262d;
+  --primary:#58a6ff;--success:#3fb950;--warn:#e3b341;--danger:#f85149;
+  --text:#e6edf3;--muted:#8b949e;--purple:#bc8cff;--cyan:#79c0ff;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+     background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}
+
+/* ── CONFIG SCREEN ─────────────────────────────── */
+#cfg{display:none;flex-direction:column;align-items:center;justify-content:center;
+     min-height:100vh;padding:24px;text-align:center}
+.cfg-logo{font-size:48px;margin-bottom:12px}
+.cfg-title{font-size:20px;font-weight:700;color:var(--primary);margin-bottom:6px}
+.cfg-sub{font-size:13px;color:var(--muted);margin-bottom:24px;line-height:1.5}
+.cfg-steps{text-align:left;background:var(--card);border:1px solid var(--border);
+           border-radius:12px;padding:16px;margin-bottom:20px;width:100%;max-width:360px}
+.cfg-step{display:flex;gap:10px;margin-bottom:10px;font-size:13px;color:var(--muted)}
+.cfg-step:last-child{margin-bottom:0}
+.cfg-num{width:22px;height:22px;border-radius:50%;background:var(--primary);
+         color:#000;font-weight:700;font-size:11px;display:flex;align-items:center;
+         justify-content:center;flex-shrink:0;margin-top:1px}
+.inp{width:100%;max-width:360px;padding:12px 14px;border:1px solid var(--border);
+     border-radius:10px;background:var(--card);color:var(--text);font-size:14px;
+     outline:none;margin-bottom:10px}
+.inp:focus{border-color:var(--primary)}
+.btn-main{width:100%;max-width:360px;padding:13px;border:none;border-radius:10px;
+          background:var(--primary);color:#000;font-size:15px;font-weight:700;
+          cursor:pointer;margin-bottom:8px}
+.btn-main:active{opacity:.85}
+
+/* ── NAV ───────────────────────────────────────── */
+.nav{display:flex;background:var(--card);border-top:1px solid var(--border);
+     position:fixed;bottom:0;left:0;right:0;z-index:100;padding-bottom:env(safe-area-inset-bottom)}
+.nb{flex:1;padding:8px 2px 6px;border:none;background:none;color:var(--muted);
+    font-size:10px;cursor:pointer;display:flex;flex-direction:column;
+    align-items:center;gap:2px;transition:.15s}
+.nb.on{color:var(--primary)}
+.nb-ico{font-size:20px;line-height:1}
+
+/* ── PAGES ─────────────────────────────────────── */
+#app{display:none;padding-bottom:70px}
+.pg{display:none;padding:14px 12px}
+.pg.on{display:block}
+
+/* ── CARDS & GRID ──────────────────────────────── */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;
+      padding:14px 10px;text-align:center}
+.card-n{font-size:24px;font-weight:700}
+.card-l{font-size:11px;color:var(--muted);margin-top:3px}
+.c-blue{color:var(--primary)}
+.c-green{color:var(--success)}
+.c-yellow{color:var(--warn)}
+.c-purple{color:var(--purple)}
+.c-cyan{color:var(--cyan)}
+.c-red{color:var(--danger)}
+
+/* ── STATUS BAR ─────────────────────────────────── */
+.sbar{display:flex;align-items:center;gap:8px;background:var(--card);
+      border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot-g{background:var(--success)}
+.dot-r{background:var(--danger)}
+.dot-y{background:var(--warn);animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+.sbar-txt{font-size:12px;font-weight:600;flex:1}
+.sbar-sub{font-size:11px;color:var(--muted)}
+
+/* ── SECTION TITLE ──────────────────────────────── */
+.stitle{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;
+        letter-spacing:.5px;margin:14px 0 8px}
+
+/* ── TABLE ─────────────────────────────────────── */
+.tbl-w{overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-bottom:8px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:var(--card2);padding:8px 10px;text-align:left;font-weight:600;
+   color:var(--muted);font-size:10px;text-transform:uppercase;white-space:nowrap}
+td{padding:8px 10px;border-top:1px solid var(--border);vertical-align:middle}
+tr:hover td{background:var(--card2)}
+
+/* ── SEARCH ─────────────────────────────────────── */
+.search{width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:10px;
+        background:var(--card);color:var(--text);font-size:14px;outline:none;margin-bottom:8px}
+.search:focus{border-color:var(--primary)}
+
+/* ── PAGINATION ─────────────────────────────────── */
+.pages{display:flex;justify-content:center;align-items:center;gap:10px;margin-top:8px}
+.pbtn{padding:6px 14px;border:1px solid var(--border);border-radius:8px;
+      background:var(--card);color:var(--text);cursor:pointer;font-size:12px}
+.pbtn:disabled{opacity:.3;cursor:default}
+.pinfo{font-size:11px;color:var(--muted)}
+
+/* ── BADGES ─────────────────────────────────────── */
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600}
+.bg{background:rgba(63,185,80,.15);color:var(--success)}
+.bb{background:rgba(88,166,255,.15);color:var(--primary)}
+.br{background:rgba(248,81,73,.15);color:var(--danger)}
+.by{background:rgba(227,179,65,.15);color:var(--warn)}
+.bp{background:rgba(188,140,255,.15);color:var(--purple)}
+
+/* ── FORMS ──────────────────────────────────────── */
+.flabel{font-size:11px;color:var(--muted);margin-bottom:4px;margin-top:10px}
+.finp{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;
+      background:var(--card);color:var(--text);font-size:13px;outline:none}
+.finp:focus{border-color:var(--primary)}
+select.finp{cursor:pointer}
+.btn{padding:11px 16px;border:none;border-radius:8px;font-size:13px;
+     font-weight:600;cursor:pointer;width:100%;margin-top:8px}
+.btn:active{opacity:.8}
+.btn-p{background:var(--primary);color:#000}
+.btn-g{background:var(--success);color:#000}
+.btn-r{background:var(--danger);color:#fff}
+.btn-y{background:var(--warn);color:#000}
+.btn-o{background:var(--card2);color:var(--text);border:1px solid var(--border)}
+.btn2{display:flex;gap:6px}
+.btn2 .btn{flex:1}
+.btn-sm{padding:5px 10px;font-size:11px;width:auto;margin-top:0;border-radius:6px}
+
+/* ── WATCH ITEM ─────────────────────────────────── */
+.witem{background:var(--card);border:1px solid var(--border);border-radius:10px;
+       padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+.witem-info{flex:1}
+.witem-name{font-size:13px;font-weight:600}
+.witem-sub{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* ── SOURCE ITEM ─────────────────────────────────── */
+.sitem{display:flex;align-items:center;gap:8px;padding:9px 0;
+       border-bottom:1px solid var(--border)}
+.sitem:last-child{border-bottom:none}
+.sitem-link{font-size:12px;color:var(--cyan);word-break:break-all;flex:1}
+.sitem-cnt{font-size:11px;color:var(--muted);flex-shrink:0}
+
+/* ── ADMIN ITEM ─────────────────────────────────── */
+.aitem{display:flex;align-items:center;gap:8px;padding:8px 0;
+       border-bottom:1px solid var(--border)}
+.aitem:last-child{border-bottom:none}
+.aitem-id{font-family:monospace;font-size:13px;color:var(--cyan);flex:1}
+
+/* ── CONTROL BUTTONS ─────────────────────────────── */
+.ctrl-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px}
+.ctrl-btn{padding:10px 8px;border:1px solid var(--border);border-radius:8px;
+          background:var(--card);color:var(--text);font-size:12px;
+          font-weight:600;cursor:pointer;text-align:center}
+.ctrl-btn:active{opacity:.7}
+.ctrl-btn.pause{border-color:var(--danger);color:var(--danger)}
+.ctrl-btn.resume{border-color:var(--success);color:var(--success)}
+
+/* ── USER MODAL ─────────────────────────────────── */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200}
+.modal-bg.on{display:flex;align-items:flex-end;justify-content:center}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:20px 20px 0 0;
+       width:100%;max-height:80vh;overflow-y:auto;padding:20px 16px}
+.modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;
+              margin:0 auto 16px}
+.modal-name{font-size:18px;font-weight:700;margin-bottom:4px}
+.modal-un{font-size:14px;color:var(--primary)}
+.mrow{display:flex;gap:8px;margin-top:10px}
+.mlbl{font-size:11px;color:var(--muted);margin-bottom:2px}
+.mval{font-size:13px;font-family:monospace}
+.mfield{flex:1;background:var(--card2);border-radius:8px;padding:8px 10px}
+.mbio{background:var(--card2);border-radius:8px;padding:10px;margin-top:8px;
+      font-size:12px;color:var(--muted);line-height:1.5;word-break:break-word}
+.mgroups{margin-top:10px}
+.mgroup{display:inline-block;background:rgba(88,166,255,.1);color:var(--primary);
+        border-radius:6px;padding:2px 8px;font-size:11px;margin:2px 2px 0 0}
+.mcopy{background:none;border:none;color:var(--primary);font-size:11px;cursor:pointer;
+       padding:2px 6px;border-radius:4px;margin-top:4px}
+.mcopy:active{background:rgba(88,166,255,.1)}
+
+/* ── MISC ───────────────────────────────────────── */
+.empty{text-align:center;padding:30px;color:var(--muted);font-size:13px}
+.load{text-align:center;padding:20px;color:var(--muted)}
+.divider{border:none;border-top:1px solid var(--border);margin:12px 0}
+.tag{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;
+     border-radius:4px;background:rgba(88,166,255,.15);color:var(--primary)}
+</style>
+</head>
+<body>
+
+<!-- CONFIG SCREEN -->
+<div id="cfg">
+  <div class="cfg-logo">🛰️</div>
+  <div class="cfg-title">Kiber Stansiya OSINT</div>
+  <div class="cfg-sub">Backend API URL sini kiriting<br>(ngrok yoki lokal server)</div>
+  <div class="cfg-steps">
+    <div class="cfg-step"><div class="cfg-num">1</div><div>Botni yoqing: <b>START_BOT.bat</b></div></div>
+    <div class="cfg-step"><div class="cfg-num">2</div><div>Tunnelni yoqing: <b>NGROK_START.bat</b></div></div>
+    <div class="cfg-step"><div class="cfg-num">3</div><div>Chiqqan <b>https://xxxx.ngrok-free.app</b> linkni pastga kiriting</div></div>
+  </div>
+  <input class="inp" id="cfg-url" placeholder="https://xxxx.ngrok-free.app" type="url">
+  <button class="btn-main" onclick="saveApi()">✅ Ulanish</button>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+
+  <!-- TAB: DASHBOARD -->
+  <div id="pg-dash" class="pg on">
+    <div id="d-status" class="sbar"><div class="dot dot-y" id="d-dot"></div>
+      <div><div class="sbar-txt" id="d-txt">Yuklanmoqda...</div>
+           <div class="sbar-sub" id="d-sub"></div></div>
+      <button class="pbtn" style="padding:4px 10px;font-size:11px" onclick="loadDash()">🔄</button>
+    </div>
+
+    <div class="grid2" id="d-grid"><div class="load">...</div></div>
+
+    <div class="stitle">⚡ Tezkor boshqaruv</div>
+    <div class="ctrl-row">
+      <button class="ctrl-btn pause" onclick="ctrlPost('/api/monitoring/pause')">⏸ Monitoring off</button>
+      <button class="ctrl-btn resume" onclick="ctrlPost('/api/monitoring/resume')">▶️ Monitoring on</button>
+      <button class="ctrl-btn pause" onclick="ctrlPost('/api/monitoring/pause_music')">🎵 Musiqa off</button>
+      <button class="ctrl-btn resume" onclick="ctrlPost('/api/monitoring/resume_music')">🎵 Musiqa on</button>
+      <button class="ctrl-btn pause" onclick="ctrlPost('/api/monitoring/pause_profiles')">👤 Profillar off</button>
+      <button class="ctrl-btn resume" onclick="ctrlPost('/api/monitoring/resume_profiles')">👤 Profillar on</button>
+    </div>
+    <button class="btn btn-o" onclick="ctrlPost('/api/monitoring/clear_queue').then(()=>loadDash())">🗑 Navbatni tozalash</button>
+
+    <div class="stitle">📡 API server</div>
+    <div style="font-size:11px;color:var(--muted);word-break:break-all" id="d-apiurl"></div>
+    <button class="btn btn-o" style="margin-top:6px" onclick="resetApi()">🔗 API URL o'zgartirish</button>
+  </div>
+
+  <!-- TAB: USERS -->
+  <div id="pg-users" class="pg">
+    <input class="search" id="u-q" placeholder="🔍 Ism, username, telefon..." oninput="uSearch()">
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px" id="u-info"></div>
+    <div class="tbl-w">
+      <table>
+        <thead><tr><th>#</th><th>Ism</th><th>Username</th><th>Tel</th><th>Kanal</th><th>Sana</th></tr></thead>
+        <tbody id="u-body"><tr><td colspan="6" class="load">Yuklanmoqda...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pages">
+      <button class="pbtn" id="u-prev" onclick="uNav(-1)" disabled>‹</button>
+      <span class="pinfo" id="u-pg">1/1</span>
+      <button class="pbtn" id="u-next" onclick="uNav(1)">›</button>
+    </div>
+  </div>
+
+  <!-- TAB: MUSIC -->
+  <div id="pg-music" class="pg">
+    <div class="grid3" id="m-stats"></div>
+    <div class="stitle">👁 Kuzatilayotgan musiqalar</div>
+    <div id="m-watches"></div>
+    <div class="stitle">🎵 Fingerprint bazasi</div>
+    <div class="tbl-w">
+      <table>
+        <thead><tr><th>#</th><th>Kanal</th><th>Fayl</th><th>Vaqt</th><th>Sana</th></tr></thead>
+        <tbody id="m-body"><tr><td colspan="5" class="load">Yuklanmoqda...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pages">
+      <button class="pbtn" id="m-prev" onclick="mNav(-1)" disabled>‹</button>
+      <span class="pinfo" id="m-pg">1/1</span>
+      <button class="pbtn" id="m-next" onclick="mNav(1)">›</button>
+    </div>
+  </div>
+
+  <!-- TAB: SOURCES -->
+  <div id="pg-src" class="pg">
+    <div class="stitle">📋 Guruhlar</div>
+    <div id="src-groups"></div>
+
+    <div class="stitle">🔒 Maxfiy kanallar</div>
+    <div id="src-hidden"></div>
+
+    <hr class="divider">
+    <div class="stitle">➕ Guruh skanerlash qo'shish</div>
+    <div class="flabel">Guruh linki yoki @username</div>
+    <input class="finp" id="src-link" placeholder="t.me/guruh yoki @username">
+    <div class="flabel">Skanerlash turi</div>
+    <select class="finp" id="src-type">
+      <option value="group">🔍 Ochiq guruh</option>
+      <option value="msg">📨 Yopiq guruh (xabarlar)</option>
+      <option value="comment">💬 Kanal kamment</option>
+    </select>
+    <button class="btn btn-p" onclick="addSource()">▶️ Skanerlashni boshlash</button>
+
+    <hr class="divider">
+    <div class="stitle">🔒 Maxfiy kanal qo'shish</div>
+    <div class="flabel">Kanal linki (t.me/+XXXX yoki @username)</div>
+    <input class="finp" id="hid-link" placeholder="t.me/+xxxxxxx">
+    <button class="btn btn-y" onclick="addHidden()">🔒 Monitoring qo'shish</button>
+  </div>
+
+  <!-- TAB: CONTROL -->
+  <div id="pg-ctrl" class="pg">
+
+    <div class="stitle">🔎 Kalit so'z qidiruv</div>
+    <div class="flabel">Qidiruv so'zi (vergul bilan ajratish mumkin)</div>
+    <input class="finp" id="kw-q" placeholder="sotaman, telefon, uy">
+    <div class="flabel">Oxirgi necha kun (default: 30)</div>
+    <input class="finp" id="kw-d" type="number" value="30" min="1" max="365">
+    <button class="btn btn-p" onclick="doKeyword()">🔎 Qidirish</button>
+    <div id="kw-res" style="font-size:12px;color:var(--muted);margin-top:6px"></div>
+
+    <hr class="divider">
+    <div class="stitle">📤 Excel yuklash</div>
+    <button class="btn btn-g" onclick="downloadExcel()">⬇️ Excel faylini yuklab olish</button>
+    <div id="xl-res" style="font-size:12px;color:var(--muted);margin-top:6px"></div>
+
+    <hr class="divider">
+    <div class="stitle">📊 Skanerlash holati</div>
+    <div class="sbar" style="margin-bottom:8px">
+      <div class="dot dot-y" id="sc-dot"></div>
+      <div><div class="sbar-txt" id="sc-txt">Yuklanmoqda...</div>
+           <div class="sbar-sub" id="sc-sub"></div></div>
+      <button class="pbtn" style="padding:4px 10px;font-size:11px" onclick="loadScanStatus()">🔄</button>
+    </div>
+
+    <div class="stitle">🔍 Yangi skanerlash</div>
+    <div class="flabel">Guruh linki yoki @username</div>
+    <input class="finp" id="sc-tgt" placeholder="t.me/guruh yoki @username">
+    <div class="flabel">Tur</div>
+    <select class="finp" id="sc-type">
+      <option value="group">🔍 Ochiq guruh</option>
+      <option value="msg">📨 Yopiq guruh</option>
+      <option value="comment">💬 Kanal kamment</option>
+    </select>
+    <button class="btn btn-g" onclick="doScan()">▶️ Skanerlashni boshlash</button>
+
+    <hr class="divider">
+    <div class="stitle">👥 Adminlar</div>
+    <div id="adm-list"></div>
+    <div class="flabel">Yangi admin Telegram ID</div>
+    <div class="btn2">
+      <input class="finp" id="adm-id" placeholder="123456789" type="number" style="flex:1">
+      <button class="btn btn-p btn-sm" style="margin-top:0;width:auto;padding:10px 14px" onclick="addAdmin()">➕</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- NAV -->
+<nav class="nav" id="nav" style="display:none">
+  <button class="nb on" onclick="pg('dash',0,this)"><div class="nb-ico">📊</div>Dashboard</button>
+  <button class="nb"    onclick="pg('users',1,this)"><div class="nb-ico">👥</div>Profillar</button>
+  <button class="nb"    onclick="pg('music',2,this)"><div class="nb-ico">🎵</div>Musiqa</button>
+  <button class="nb"    onclick="pg('src',3,this)"><div class="nb-ico">📋</div>Manbalar</button>
+  <button class="nb"    onclick="pg('ctrl',4,this)"><div class="nb-ico">⚙️</div>Boshqaruv</button>
+</nav>
+
+<!-- USER DETAIL MODAL -->
+<div id="modal-bg" class="modal-bg" onclick="closeModal(event)">
+  <div class="modal" id="modal-content" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-name" id="m-name"></div>
+    <div class="modal-un" id="m-un"></div>
+    <div class="mrow">
+      <div class="mfield"><div class="mlbl">Telefon</div><div class="mval" id="m-ph"></div></div>
+      <div class="mfield"><div class="mlbl">Telegram ID</div><div class="mval" id="m-id"></div></div>
+    </div>
+    <div class="mrow">
+      <div class="mfield" style="flex:1"><div class="mlbl">Ochiq kanallar</div><div class="mval" id="m-oc" style="font-size:11px"></div></div>
+    </div>
+    <div class="mrow">
+      <div class="mfield" style="flex:1"><div class="mlbl">Maxfiy kanal</div><div class="mval" id="m-hh" style="font-size:11px"></div></div>
+    </div>
+    <div class="mrow" style="gap:4px;flex-wrap:wrap" id="m-dates"></div>
+    <div style="margin-top:8px;font-size:11px;color:var(--muted)">Bio</div>
+    <div class="mbio" id="m-bio"></div>
+    <div class="stitle">Guruhlar</div>
+    <div id="m-grps"></div>
+    <button class="btn btn-o" style="margin-top:14px" onclick="document.getElementById('modal-bg').classList.remove('on')">✕ Yopish</button>
+  </div>
+</div>
+
+<script>
+const tg = window.Telegram?.WebApp;
+if(tg){tg.ready();tg.expand();}
+
+let apiBase = '';
+let uCur=1,uTotal=1,uQ='';
+let mCur=1,mTotal=1;
+let searchTmr=null;
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+window.onload = () => {
+  apiBase = (localStorage.getItem('kiber_api_url')||'').replace(/\/$/,'');
+  if(apiBase){
+    showApp();
+  } else {
+    document.getElementById('cfg').style.display='flex';
+  }
+};
+
+function saveApi(){
+  const u = document.getElementById('cfg-url').value.trim().replace(/\/$/,'');
+  if(!u){ alert('URL kiriting!'); return; }
+  localStorage.setItem('kiber_api_url', u);
+  apiBase = u;
+  document.getElementById('cfg').style.display='none';
+  showApp();
+}
+
+function resetApi(){
+  localStorage.removeItem('kiber_api_url');
+  apiBase='';
+  document.getElementById('app').style.display='none';
+  document.getElementById('nav').style.display='none';
+  document.getElementById('cfg').style.display='flex';
+}
+
+function showApp(){
+  document.getElementById('app').style.display='block';
+  document.getElementById('nav').style.display='flex';
+  document.getElementById('d-apiurl').textContent = apiBase;
+  loadDash();
+}
+
+// ── API HELPER ────────────────────────────────────────────────────────────────
+async function api(path, opts={}){
+  const h = {'ngrok-skip-browser-warning':'1',...(opts.headers||{})};
+  if(opts.body && typeof opts.body==='object' && !(opts.body instanceof FormData)){
+    h['Content-Type']='application/json';
+    opts.body = JSON.stringify(opts.body);
+  }
+  try{
+    const r = await fetch(apiBase+path, {...opts, headers:h});
+    return await r.json();
+  }catch(e){
+    return {error: e.message};
+  }
+}
+
+async function ctrlPost(path){
+  const r = await api(path, {method:'POST'});
+  if(r.ok !== false) setTimeout(loadDash,400);
+  return r;
+}
+
+// ── NAVIGATION ────────────────────────────────────────────────────────────────
+function pg(name, idx, btn){
+  document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
+  document.getElementById('pg-'+name).classList.add('on');
+  btn.classList.add('on');
+  if(name==='dash')  loadDash();
+  if(name==='users'){ uCur=1; loadUsers(); }
+  if(name==='music'){ mCur=1; loadMusic(); }
+  if(name==='src')   loadSources();
+  if(name==='ctrl')  loadCtrl();
+}
+
+function fmt(n){ return (n||0).toLocaleString(); }
+function esc(s){ return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────────
+async function loadDash(){
+  const st = await api('/api/stats');
+  if(st.error){
+    document.getElementById('d-txt').textContent = '❌ API ulanmadi';
+    document.getElementById('d-dot').className = 'dot dot-r';
+    return;
+  }
+  const paused=st.monitoring_paused, scanning=st.scan_count>0;
+  const dot=document.getElementById('d-dot');
+  dot.className='dot '+(scanning?'dot-y':paused?'dot-r':'dot-g');
+  document.getElementById('d-txt').textContent =
+    scanning?`⚡ Skanerlash (${st.scan_count} ta)`:paused?'⏸ Monitoring off':'✅ Monitoring faol';
+  let sub = [];
+  if(st.music_paused) sub.push('🎵 Musiqa off');
+  if(st.profile_slow) sub.push('👤 Profil slow');
+  if(st.queue_size>0) sub.push(`📋 Navbat: ${st.queue_size}`);
+  document.getElementById('d-sub').textContent = sub.join(' · ');
+
+  document.getElementById('d-grid').innerHTML = `
+    <div class="card"><div class="card-n c-blue">${fmt(st.users)}</div><div class="card-l">👥 Foydalanuvchilar</div></div>
+    <div class="card"><div class="card-n c-cyan">${fmt(st.groups)}</div><div class="card-l">📢 Manbalar</div></div>
+    <div class="card"><div class="card-n c-green">${fmt(st.fingerprints)}</div><div class="card-l">🎵 Fingerprintlar</div></div>
+    <div class="card"><div class="card-n c-purple">${fmt(st.with_channels)}</div><div class="card-l">🔗 Kanalli profil</div></div>
+    <div class="card"><div class="card-n c-yellow">${fmt(st.hidden_pending)}</div><div class="card-l">⏳ Maxfiy kutilmoqda</div></div>
+    <div class="card"><div class="card-n c-green">${fmt(st.hidden_joined)}</div><div class="card-l">🔓 Maxfiy kirilgan</div></div>
+  `;
+}
+
+// ── USERS ─────────────────────────────────────────────────────────────────────
+async function loadUsers(){
+  document.getElementById('u-body').innerHTML='<tr><td colspan="6" class="load">...</td></tr>';
+  const d = await api(`/api/users?q=${encodeURIComponent(uQ)}&page=${uCur}&limit=50`);
+  if(d.error){ document.getElementById('u-body').innerHTML=`<tr><td colspan="6" class="empty">${esc(d.error)}</td></tr>`; return; }
+  uTotal = d.pages||1;
+  document.getElementById('u-info').textContent = `Jami: ${fmt(d.total)} ta`;
+  document.getElementById('u-pg').textContent = `${uCur}/${uTotal}`;
+  document.getElementById('u-prev').disabled = uCur<=1;
+  document.getElementById('u-next').disabled = uCur>=uTotal;
+
+  const rows = (d.users||[]).map((u,i)=>{
+    const hasK = u.open_channels||u.has_hidden;
+    return `<tr style="cursor:pointer" onclick="openUser(${u.id})">
+      <td style="color:var(--muted)">${(uCur-1)*50+i+1}</td>
+      <td><b>${esc(u.name)||'—'}</b></td>
+      <td style="color:var(--primary)">${esc(u.username)||'—'}</td>
+      <td style="font-family:monospace;font-size:11px">${esc(u.phone)||'—'}</td>
+      <td>${hasK?'<span class="badge bg">✓</span>':''}</td>
+      <td style="color:var(--muted);font-size:11px">${(u.updated||'').slice(0,10)}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" class="empty">Topilmadi</td></tr>';
+  document.getElementById('u-body').innerHTML = rows;
+}
+
+function uSearch(){
+  clearTimeout(searchTmr);
+  searchTmr = setTimeout(()=>{ uQ=document.getElementById('u-q').value; uCur=1; loadUsers(); }, 400);
+}
+function uNav(d){ uCur=Math.max(1,Math.min(uTotal,uCur+d)); loadUsers(); }
+
+async function openUser(id){
+  const u = await api(`/api/users/${id}`);
+  if(u.error||!u.id){ alert('Ma\'lumot topilmadi'); return; }
+  document.getElementById('m-name').textContent = `${u.first_name} ${u.last_name}`.trim()||'Nomsiz';
+  document.getElementById('m-un').textContent   = u.username||'';
+  document.getElementById('m-ph').textContent   = u.phone||'—';
+  document.getElementById('m-id').textContent   = u.id;
+  document.getElementById('m-oc').textContent   = u.open_channels||'—';
+  document.getElementById('m-hh').textContent   = u.has_hidden||'—';
+  document.getElementById('m-bio').textContent  = u.bio||'(bio yo\'q)';
+  document.getElementById('m-dates').innerHTML  =
+    `<div class="mfield"><div class="mlbl">Qo'shilgan</div><div style="font-size:11px">${u.added||'—'}</div></div>
+     <div class="mfield"><div class="mlbl">Yangilangan</div><div style="font-size:11px">${u.updated||'—'}</div></div>`;
+  document.getElementById('m-grps').innerHTML   =
+    (u.groups||[]).map(g=>`<span class="mgroup">${esc(g)}</span>`).join('')||'<span style="color:var(--muted);font-size:12px">—</span>';
+  document.getElementById('modal-bg').classList.add('on');
+}
+
+function closeModal(e){ if(e.target.id==='modal-bg') document.getElementById('modal-bg').classList.remove('on'); }
+
+// ── MUSIC ─────────────────────────────────────────────────────────────────────
+async function loadMusic(){
+  const [d, st] = await Promise.all([
+    api(`/api/music?page=${mCur}&limit=50`),
+    api('/api/stats')
+  ]);
+  document.getElementById('m-stats').innerHTML = `
+    <div class="card"><div class="card-n c-green">${fmt(d.total||0)}</div><div class="card-l">🎵 Fingerprintlar</div></div>
+    <div class="card"><div class="card-n c-yellow">${(d.watches||[]).length}</div><div class="card-l">👁 Kuzatilmoqda</div></div>
+    <div class="card"><div class="card-n c-cyan">${fmt(st.music_channels||0)}</div><div class="card-l">📢 Kanallar</div></div>
+  `;
+  mTotal = d.pages||1;
+  document.getElementById('m-pg').textContent = `${mCur}/${mTotal}`;
+  document.getElementById('m-prev').disabled = mCur<=1;
+  document.getElementById('m-next').disabled = mCur>=mTotal;
+
+  document.getElementById('m-watches').innerHTML = (d.watches||[]).length
+    ? (d.watches||[]).map(w=>`
+        <div class="witem">
+          <div class="witem-info">
+            <div class="witem-name">🎵 ${esc(w.name)}</div>
+            <div class="witem-sub">${w.duration}s · ${(w.added||'').slice(0,10)}</div>
+          </div>
+          <button class="btn btn-r btn-sm" onclick="delWatch(${w.id})">🗑</button>
+        </div>`).join('')
+    : '<div class="empty" style="padding:12px">Kuzatilayotgan musiqa yo\'q</div>';
+
+  document.getElementById('m-body').innerHTML = (d.fingerprints||[]).map((f,i)=>`
+    <tr>
+      <td style="color:var(--muted)">${(mCur-1)*50+i+1}</td>
+      <td style="font-size:11px;color:var(--cyan)">${esc(f.ch_name)}</td>
+      <td style="color:var(--muted);font-size:11px">${esc(f.fname)}</td>
+      <td>${f.dur}s</td>
+      <td style="color:var(--muted);font-size:11px">${(f.added||'').slice(0,10)}</td>
+    </tr>`).join('') || '<tr><td colspan="5" class="empty">Bo\'sh</td></tr>';
+}
+
+function mNav(d){ mCur=Math.max(1,Math.min(mTotal,mCur+d)); loadMusic(); }
+
+async function delWatch(id){
+  if(!confirm('Kuzatuv o\'chirilsinmi?')) return;
+  const r = await api(`/api/watch/${id}`, {method:'DELETE'});
+  if(r.ok) loadMusic();
+}
+
+// ── SOURCES ───────────────────────────────────────────────────────────────────
+async function loadSources(){
+  const d = await api('/api/sources');
+  const groups  = (d.sources||[]).filter(s=>s.type==='group');
+  const hidden  = (d.sources||[]).filter(s=>s.type.startsWith('hidden'));
+
+  document.getElementById('src-groups').innerHTML = groups.length
+    ? groups.map(s=>`
+        <div class="sitem">
+          <span class="sitem-link">${esc(s.link)}</span>
+          <span class="sitem-cnt">${s.users} ta</span>
+          <button class="btn btn-r btn-sm" onclick="removeSrc('${esc(s.link)}')">✕</button>
+        </div>`).join('')
+    : '<div class="empty" style="padding:10px">Guruh yo\'q</div>';
+
+  document.getElementById('src-hidden').innerHTML = hidden.length
+    ? hidden.map(s=>`
+        <div class="sitem">
+          <span class="sitem-link">${esc(s.link)}</span>
+          <span class="badge ${s.type.includes('joined')?'bg':'by'}">${s.type.includes('joined')?'joined':'pending'}</span>
+          <button class="btn btn-r btn-sm" onclick="removeHid('${esc(s.link)}')">✕</button>
+        </div>`).join('')
+    : '<div class="empty" style="padding:10px">Maxfiy kanal yo\'q</div>';
+}
+
+async function addSource(){
+  const link = document.getElementById('src-link').value.trim();
+  const type = document.getElementById('src-type').value;
+  if(!link){ alert('Link kiriting!'); return; }
+  const r = await api('/api/sources/add', {method:'POST', body:{link, scan_type:type}});
+  if(r.ok){ document.getElementById('src-link').value=''; alert('✅ '+r.message); loadSources(); }
+  else alert('❌ '+(r.detail||r.error||'Xato'));
+}
+
+async function addHidden(){
+  const cid = document.getElementById('hid-link').value.trim();
+  if(!cid){ alert('Kanal linkini kiriting!'); return; }
+  const r = await api('/api/hidden/add', {method:'POST', body:{channel_id:cid}});
+  if(r.ok){ document.getElementById('hid-link').value=''; alert('✅ Maxfiy kanal qo\'shildi'); loadSources(); }
+  else alert('❌ '+(r.detail||r.error||'Xato'));
+}
+
+async function removeSrc(link){
+  if(!confirm(`"${link}" guruhini o'chirishni tasdiqlaysizmi?`)) return;
+  await api('/api/sources?link='+encodeURIComponent(link), {method:'DELETE'});
+  loadSources();
+}
+
+async function removeHid(cid){
+  if(!confirm('Maxfiy kanalni ro\'yxatdan o\'chirishni tasdiqlaysizmi?')) return;
+  await api('/api/hidden?channel_id='+encodeURIComponent(cid), {method:'DELETE'});
+  loadSources();
+}
+
+// ── CONTROL ───────────────────────────────────────────────────────────────────
+async function loadCtrl(){
+  loadScanStatus();
+  loadAdmins();
+}
+
+async function loadScanStatus(){
+  const st = await api('/api/scan/status');
+  const paused=st.monitoring_paused, scanning=st.scan_count>0;
+  document.getElementById('sc-dot').className='dot '+(scanning?'dot-y':paused?'dot-r':'dot-g');
+  document.getElementById('sc-txt').textContent =
+    scanning?`⚡ Skanerlash (${st.scan_count} ta)`:paused?'⏸ To\'xtatilgan':'✅ Faol';
+  let sub=[];
+  if(st.music_paused) sub.push('🎵 Musiqa off');
+  if(st.profile_slow) sub.push('👤 Profillar slow');
+  if(st.queue_size>0) sub.push(`📋 Navbat: ${st.queue_size}`);
+  document.getElementById('sc-sub').textContent = sub.join(' · ');
+}
+
+async function doKeyword(){
+  const q = document.getElementById('kw-q').value.trim();
+  const d = parseInt(document.getElementById('kw-d').value)||30;
+  if(!q){ alert('So\'z kiriting!'); return; }
+  document.getElementById('kw-res').textContent = '⏳ Yuborilmoqda...';
+  const r = await api('/api/keyword/search', {method:'POST', body:{query:q, days:d}});
+  document.getElementById('kw-res').textContent = r.ok ? '✅ '+r.message : '❌ '+r.message;
+}
+
+async function doScan(){
+  const t = document.getElementById('sc-tgt').value.trim();
+  const tp = document.getElementById('sc-type').value;
+  if(!t){ alert('Guruh linkini kiriting!'); return; }
+  const r = await api('/api/scan/start', {method:'POST', body:{target:t, scan_type:tp}});
+  if(r.ok){ document.getElementById('sc-tgt').value=''; alert('✅ '+r.message); loadScanStatus(); }
+  else alert('❌ '+(r.detail||r.error||'Xato'));
+}
+
+async function downloadExcel(){
+  document.getElementById('xl-res').textContent = '⏳ Fayl tayyorlanmoqda...';
+  try{
+    const r = await fetch(apiBase+'/api/excel/download',
+      {headers:{'ngrok-skip-browser-warning':'1'}});
+    if(!r.ok){ document.getElementById('xl-res').textContent='❌ Xato: '+r.status; return; }
+    const blob = await r.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'OSINT.xlsx'; a.click();
+    URL.revokeObjectURL(url);
+    document.getElementById('xl-res').textContent = '✅ Fayl yuklab olindi!';
+  }catch(e){
+    document.getElementById('xl-res').textContent = '❌ '+e.message;
+  }
+}
+
+async function loadAdmins(){
+  const d = await api('/api/admins');
+  const admins = d.admins||[];
+  const super_id = d.super_admin;
+  document.getElementById('adm-list').innerHTML = admins.length||super_id
+    ? [
+        super_id?`<div class="aitem"><span class="aitem-id">${super_id}</span><span class="badge bg">Super Admin</span></div>`:'',
+        ...admins.map(a=>`
+          <div class="aitem">
+            <span class="aitem-id">${a.id}</span>
+            <button class="btn btn-r btn-sm" onclick="removeAdmin(${a.id})">✕</button>
+          </div>`)
+      ].join('')
+    : '<div style="color:var(--muted);font-size:12px;padding:8px 0">Adminlar yo\'q</div>';
+}
+
+async function addAdmin(){
+  const id = parseInt(document.getElementById('adm-id').value);
+  if(!id){ alert('ID kiriting!'); return; }
+  const r = await api('/api/admins/add', {method:'POST', body:{user_id:id}});
+  if(r.ok){ document.getElementById('adm-id').value=''; loadAdmins(); }
+  else alert('❌ '+(r.detail||r.error||'Xato'));
+}
+
+async function removeAdmin(id){
+  if(!confirm(`Admin ${id} ni o'chirishni tasdiqlaysizmi?`)) return;
+  const r = await api(`/api/admins/${id}`, {method:'DELETE'});
+  if(r.ok) loadAdmins();
+  else alert('❌ '+(r.detail||r.error||'Xato'));
+}
+
+// Auto-refresh scan status every 30s when on control tab
+setInterval(()=>{
+  if(document.getElementById('pg-ctrl').classList.contains('on')) loadScanStatus();
+  if(document.getElementById('pg-dash').classList.contains('on')) loadDash();
+},30000);
+</script>
+</body>
+</html>
