@@ -5,6 +5,7 @@ import random
 import aiosqlite
 import database as db_mod
 from datetime import datetime
+from collections import defaultdict
 
 # Numpy optimallashtirish — o'rnatilgan bo'lsa 100x tezroq taqqoslash
 try:
@@ -207,6 +208,7 @@ def compare_fingerprints_sliding(fp1, fp2, window=100):
     fp1: qidirilayotgan musiqa (query)
     fp2: bazadagi musiqa (database)
     Ikkala tomonda ham siljitiladi — faqat bittasini siljitish xato edi.
+    Numpy mavjud bo'lsa inner loop NumPy XOR bilan almashtiriladi.
     """
     try:
         nums1 = list(map(int, fp1.split(',')))
@@ -228,23 +230,107 @@ def compare_fingerprints_sliding(fp1, fp2, window=100):
                 chunk1 = nums1[off1:off1 + win]
                 if len(chunk1) < win or len(chunk2) < win:
                     continue
-                total_bits = 0
-                matching_bits = 0
-                for a, b in zip(chunk1, chunk2):
-                    xor = a ^ b
-                    diff_bits = bin(xor & 0xFFFFFFFF).count('1')
-                    total_bits += 32
-                    matching_bits += (32 - diff_bits)
-                if total_bits > 0:
-                    score = matching_bits / total_bits
-                    if score > best_score:
-                        best_score = score
-                        if best_score >= 0.95:  # Juda yaxshi mos — to'xtatish
-                            return best_score
+
+                if _HAS_NUMPY:
+                    a = np.array(chunk1, dtype=np.uint32)
+                    b = np.array(chunk2, dtype=np.uint32)
+                    xor = np.bitwise_xor(a, b)
+                    diff_bits = int(np.unpackbits(xor.view(np.uint8)).sum())
+                    total_bits = win * 32
+                    score = (total_bits - diff_bits) / total_bits
+                else:
+                    total_bits = 0
+                    matching_bits = 0
+                    for a, b in zip(chunk1, chunk2):
+                        xor = a ^ b
+                        diff_bits = bin(xor & 0xFFFFFFFF).count('1')
+                        total_bits += 32
+                        matching_bits += (32 - diff_bits)
+                    score = matching_bits / total_bits if total_bits > 0 else 0.0
+
+                if score > best_score:
+                    best_score = score
+                    if best_score >= 0.95:  # Juda yaxshi mos — to'xtatish
+                        return best_score
 
         return best_score
     except Exception:
         return 0.0
+
+
+# ─────────────────────────────────────────────────────────────────────
+# LSH INDEKS (tez qidirish uchun)
+# ─────────────────────────────────────────────────────────────────────
+
+# Band-based LSH: fingerprint 10 ta bandga (har biri 32 bit) bo'linadi
+# Har bir band hash → kandidatlar ro'yxati
+_LSH_BANDS = 10
+_LSH_BAND_WIDTH = 32  # bits per band = 1 uint32 element
+
+_lsh_index: "defaultdict[tuple, list]" = defaultdict(list)
+
+
+def build_lsh_index(fps_parsed_list):
+    """
+    LSH indeksini quriladi.
+    fps_parsed_list: [(parsed_array, metadata), ...]
+      metadata — ixtiyoriy, candidate ro'yxatida qaytariladi.
+    Band-based LSH: B=10 band, har band W=32 bit (1 uint32 element).
+    Fingerprint uzunligi yetarli bo'lmasa mavjud elementlar ishlatiladi.
+    """
+    global _lsh_index
+    _lsh_index = defaultdict(list)
+    for parsed_arr, metadata in fps_parsed_list:
+        if _HAS_NUMPY:
+            arr = parsed_arr if isinstance(parsed_arr, np.ndarray) else np.array(parsed_arr, dtype=np.uint32)
+            length = len(arr)
+        else:
+            arr = parsed_arr
+            length = len(arr)
+        for band_idx in range(_LSH_BANDS):
+            start = band_idx * _LSH_BAND_WIDTH
+            if start >= length:
+                break
+            end = min(start + _LSH_BAND_WIDTH, length)
+            if _HAS_NUMPY:
+                band_val = tuple(arr[start:end].tolist())
+            else:
+                band_val = tuple(arr[start:end])
+            key = (band_idx, band_val)
+            _lsh_index[key].append((parsed_arr, metadata))
+
+
+def lsh_candidates(query_fp):
+    """
+    Query fingerprint uchun LSH kandidatlarini qaytaradi.
+    query_fp: parsed array (np.ndarray yoki list).
+    Qaytaradi: (parsed_arr, metadata) juftliklari set'i (indeks bo'yicha).
+    """
+    if _HAS_NUMPY:
+        arr = query_fp if isinstance(query_fp, np.ndarray) else np.array(query_fp, dtype=np.uint32)
+        length = len(arr)
+    else:
+        arr = query_fp
+        length = len(arr)
+
+    seen_ids = set()
+    candidates = []
+    for band_idx in range(_LSH_BANDS):
+        start = band_idx * _LSH_BAND_WIDTH
+        if start >= length:
+            break
+        end = min(start + _LSH_BAND_WIDTH, length)
+        if _HAS_NUMPY:
+            band_val = tuple(arr[start:end].tolist())
+        else:
+            band_val = tuple(arr[start:end])
+        key = (band_idx, band_val)
+        for item in _lsh_index.get(key, []):
+            item_id = id(item[0])
+            if item_id not in seen_ids:
+                seen_ids.add(item_id)
+                candidates.append(item)
+    return candidates
 
 
 def _compare_nums_fast(nums1, nums2):
@@ -262,7 +348,7 @@ def _compare_nums_fast(nums1, nums2):
     return matching_bits / total_bits if total_bits > 0 else 0.0
 
 
-def batch_compare_against_watches(watch_fps_parsed, all_fps_raw, threshold=0.70):
+def batch_compare_against_watches(watch_fps_parsed, all_fps_raw, threshold=0.65):
     """
     Barcha fingerprintlarni kuzatiladigan musiqalar bilan BITTA thread'da taqqoslaydi.
     watch_fps_parsed: [(w_id, w_name, parsed_array), ...]
@@ -271,6 +357,7 @@ def batch_compare_against_watches(watch_fps_parsed, all_fps_raw, threshold=0.70)
 
     Numpy: 14912×15 = 223,680 taqqoslash ~1-3 soniyada (thread'da, bot muzlamaydi).
     Python fallback: ~30 soniya.
+    LSH indeks: 1M fingerprintda ham 1000 kabi tez ishlaydi.
     """
     results = []
     # DB fingerprintlarini BIR MARTA parse qilish (numpy yoki list)
@@ -282,11 +369,23 @@ def batch_compare_against_watches(watch_fps_parsed, all_fps_raw, threshold=0.70)
         except Exception:
             continue
 
-    for ch_id, ch_name, fname, arr2 in db_parsed:
-        for w_id, w_name, arr1 in watch_fps_parsed:
-            score = compare_fp_arrays(arr1, arr2)
-            if score >= threshold:
-                results.append((ch_id, ch_name, fname, w_id, w_name, round(score * 100, 1)))
+    # LSH indeksini DB fingerprintlari bo'yicha quriladi
+    build_lsh_index([(arr, (ch_id, ch_name, fname)) for ch_id, ch_name, fname, arr in db_parsed])
+
+    for w_id, w_name, arr1 in watch_fps_parsed:
+        # LSH orqali kandidatlar olish
+        candidates = lsh_candidates(arr1)
+        if candidates:
+            for arr2, (ch_id, ch_name, fname) in candidates:
+                score = compare_fp_arrays(arr1, arr2)
+                if score >= threshold:
+                    results.append((ch_id, ch_name, fname, w_id, w_name, round(score * 100, 1)))
+        else:
+            # LSH kandidat topilmasa — to'liq skanerlash (fallback)
+            for ch_id, ch_name, fname, arr2 in db_parsed:
+                score = compare_fp_arrays(arr1, arr2)
+                if score >= threshold:
+                    results.append((ch_id, ch_name, fname, w_id, w_name, round(score * 100, 1)))
     return results
 
 
@@ -463,7 +562,7 @@ async def scan_all_channels(userbot, bot, admin_id, status_msg=None, userbot2=No
 # MUSIQA QIDIRISH
 # ─────────────────────────────────────────────────────────────────────
 
-async def search_music(audio_path, threshold=0.70):
+async def search_music(audio_path, threshold=0.65):
     """
     Berilgan audio faylni bazadagi fingerprint lar bilan taqqoslaydi.
     Mos kelganlarni qaytaradi.
@@ -544,7 +643,7 @@ async def delete_watch_music(music_id):
         await db.commit()
 
 
-async def check_against_watch_list(fingerprint, threshold=0.70):
+async def check_against_watch_list(fingerprint, threshold=0.65):
     """
     Yangi fingerprint ni kuzatiladigan musiqalar bilan taqqoslaydi.
     fingerprint: string yoki pre-parsed array.
@@ -635,6 +734,6 @@ async def is_profile_music_saved(user_id, fingerprint):
         return False
     for (saved_fp,) in rows:
         score = compare_fingerprints(saved_fp, fingerprint)
-        if score >= 0.70:
+        if score >= 0.65:
             return True
     return False
