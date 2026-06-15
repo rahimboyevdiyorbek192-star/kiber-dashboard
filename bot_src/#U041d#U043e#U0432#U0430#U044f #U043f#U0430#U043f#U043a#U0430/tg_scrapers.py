@@ -925,7 +925,7 @@ async def _deep_scan_parallel(all_bots, target_group, output_path, status_msg, s
         c += 1
         ws.append([c] + r)
     try:
-        _fl = asyncio.get_event_loop()
+        _fl = asyncio.get_running_loop()
         await _fl.run_in_executor(None, apply_excel_styles, ws, c)
         await _fl.run_in_executor(None, wb.save, output_path)
     except Exception as e:
@@ -995,7 +995,7 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
 
     if resume_offset > 0 and os.path.exists(output_path):
         try:
-            _loop = asyncio.get_event_loop()
+            _loop = asyncio.get_running_loop()
             wb = await asyncio.wait_for(
                 _loop.run_in_executor(None, openpyxl.load_workbook, output_path),
                 timeout=30
@@ -1315,7 +1315,7 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
 
             # Har SAVE_EVERY da Excel ga yozish + progress saqlash
             if count > 0 and count % SAVE_EVERY == 0:
-                _sv_loop = asyncio.get_event_loop()
+                _sv_loop = asyncio.get_running_loop()
                 await _sv_loop.run_in_executor(None, wb.save, output_path)
                 await db_mod.update_scan_progress(scan_id, resume_offset + _wi + 1, count)
 
@@ -1336,7 +1336,7 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
     finally:
         # Eng oxirgi saqlash — har doim bajariladi
         try:
-            _fl = asyncio.get_event_loop()
+            _fl = asyncio.get_running_loop()
             await _fl.run_in_executor(None, apply_excel_styles, ws, count)
             await _fl.run_in_executor(None, wb.save, output_path)
         except Exception as e:
@@ -2200,7 +2200,7 @@ async def _comment_scan_parallel(all_bots, target, output_path, status_msg, scan
         c += 1
         ws.append([c] + r)
     try:
-        _fl = asyncio.get_event_loop()
+        _fl = asyncio.get_running_loop()
         await _fl.run_in_executor(None, apply_excel_styles, ws, c)
         await _fl.run_in_executor(None, wb.save, output_path)
     except Exception as e:
@@ -2510,7 +2510,7 @@ async def scan_channel_comments(userbot, target, output_path, status_msg,
     finally:
         # Oxirgi saqlash — har doim bajariladi
         try:
-            _fl2 = asyncio.get_event_loop()
+            _fl2 = asyncio.get_running_loop()
             await _fl2.run_in_executor(None, apply_excel_styles, sheet, count)
             await _fl2.run_in_executor(None, wb.save, output_path)
         except Exception as e:
@@ -2916,7 +2916,14 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
         if _row and _row[0]:
             try:
                 from telethon.tl.types import PeerChannel as _PeerChannel
-                _numeric = int(_row[0])
+                # numeric_id ba'zan '-100XXXX' (marked) formatida saqlanadi.
+                # PeerChannel esa toza (bare) musbat id talab qiladi — prefiksni olib tashlaymiz.
+                _s = str(_row[0]).strip()
+                if _s.startswith('-100'):
+                    _s = _s[4:]
+                else:
+                    _s = _s.lstrip('-')
+                _numeric = int(_s)
                 entity = _PeerChannel(channel_id=_numeric)
                 channel_id = str(_numeric)
                 channel_name = _row[1] or src_str
@@ -3462,10 +3469,15 @@ async def music_channel_tracker(userbot, userbot2=None):
             print(f"music_channel_tracker xatosi: {e}")
             await asyncio.sleep(30)
 
+        # Birinchi to'liq tsikl tugadi — profil tracker endi ishga tushishi mumkin.
+        # MUHIM: bayroq True bo'lib QOLADI. Avval u darrov False ga qaytarilardi,
+        # natijada har 30s tekshiradigan profil tracker True lahzasini ko'rmay,
+        # umuman ishga tushmasdi.
         global _CHANNEL_MUSIC_DONE
-        _CHANNEL_MUSIC_DONE = True
-        print("[MUSIQA] Barcha kanal musiqalari skanerlandi — yangi tsikl boshlanmoqda...")
-        _CHANNEL_MUSIC_DONE = False
+        if not _CHANNEL_MUSIC_DONE:
+            _CHANNEL_MUSIC_DONE = True
+            print("[MUSIQA] Barcha kanal musiqalari skanerlandi — profil skaner ochildi.")
+        print("[MUSIQA] Yangi tsikl boshlanmoqda...")
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -4276,7 +4288,7 @@ async def lookup_channel_by_id(userbot, channel_id: int):
             return None, None
         title   = getattr(entity, 'title', str(channel_id))
         uname   = getattr(entity, 'username', None)
-        members = getattr(getattr(entity, 'participants_count', None), '__int__', lambda: None)()
+        members = getattr(entity, 'participants_count', None)
         if uname:
             link = f"https://t.me/{uname}"
         else:
@@ -4484,7 +4496,7 @@ async def search_by_phone(userbot, phone: str) -> dict:
         if result.users:
             u = result.users[0]
             try:
-                await userbot(DeleteContactsRequest(id=[u]))
+                await userbot(DeleteContactsRequest(id=[u.id]))
             except Exception as e:
                 _dbg("search_by_phone", e)
             return {

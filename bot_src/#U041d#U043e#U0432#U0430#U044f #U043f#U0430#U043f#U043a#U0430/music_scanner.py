@@ -168,7 +168,11 @@ def parse_fingerprint(fp_str):
     Bu funksiya bir marta chaqiriladi — taqqoslashda qayta parse QILINMAYDI.
     """
     if _HAS_NUMPY:
-        return np.fromstring(fp_str, dtype=np.int64, sep=',').astype(np.uint32)
+        # np.fromstring(sep=...) eskirgan (NumPy 2.x da olib tashlanmoqda).
+        # Buning o'rniga to'g'ridan-to'g'ri massivga aylantiramiz.
+        if not fp_str:
+            return np.empty(0, dtype=np.uint32)
+        return np.array(fp_str.split(','), dtype=np.int64).astype(np.uint32)
     return list(map(int, fp_str.split(',')))
 
 
