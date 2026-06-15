@@ -25,9 +25,9 @@ echo.
 echo [*] Kerakli kutubxonalar o'rnatilmoqda...
 echo.
 
-pip install telethon aiosqlite openpyxl python-dotenv numpy reportlab requests python-whois --quiet
+pip install telethon aiosqlite openpyxl python-dotenv numpy reportlab requests python-whois PySocks --quiet
 if %errorlevel% neq 0 (
-    pip3 install telethon aiosqlite openpyxl python-dotenv numpy reportlab requests python-whois --quiet
+    pip3 install telethon aiosqlite openpyxl python-dotenv numpy reportlab requests python-whois PySocks --quiet
 )
 
 echo [+] Asosiy kutubxonalar o'rnatildi!

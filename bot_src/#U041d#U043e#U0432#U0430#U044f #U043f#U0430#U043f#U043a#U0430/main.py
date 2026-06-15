@@ -29,6 +29,12 @@ import aiosqlite
 from telethon import TelegramClient, events, Button
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.errors import FloodWaitError, RpcCallFailError
+try:
+    import socks as _socks
+    _SOCKS_AVAILABLE = True
+except ImportError:
+    _socks = None
+    _SOCKS_AVAILABLE = False
 from dotenv import load_dotenv
 import database as db_mod
 import tg_scrapers as engine
@@ -93,8 +99,7 @@ def _save_excel_ids(tc_ids: set, all_ids: set):
     with open(EXCEL_IDS_PATH, "w", encoding="utf-8") as f:
         json.dump({"tc": list(tc_ids), "all": list(all_ids)}, f)
 
-userbot = TelegramClient(os.path.join(BASE_DIR, 'userbot_session'), API_ID, API_HASH)
-bot     = TelegramClient(os.path.join(BASE_DIR, 'bot_session'),     API_ID, API_HASH)
+_UB1_PROXY_URL = os.getenv("USERBOT1_PROXY", "").strip()
 
 # ── N-USERBOT TIZIMI ──────────────────────────────────────────────────
 # .env da yoki session fayl mavjud bo'lsa avtomatik qo'shiladi.
@@ -103,6 +108,51 @@ bot     = TelegramClient(os.path.join(BASE_DIR, 'bot_session'),     API_ID, API_
 #   yoki userbot2_session.session, userbot3_session.session fayllarini qo'ying
 # Kod o'zgarmaydi — faqat .env yoki session fayl qo'shiladi.
 # ─────────────────────────────────────────────────────────────────────
+
+def _parse_proxy(proxy_url: str):
+    """
+    Proxy URL ni Telethon formatiga o'giradi.
+    Qo'llab-quvvatlanadigan formatlar:
+      socks5://user:pass@ip:port
+      socks4://ip:port
+      http://user:pass@ip:port
+    Qaytaradi: (socks.SOCKS5, host, port, True, user, pass) yoki None.
+    """
+    if not proxy_url or not proxy_url.strip():
+        return None
+    if not _SOCKS_AVAILABLE:
+        print("[OGOHLANTIRISH] PySocks o'rnatilmagan — proxy ishlamaydi! pip install PySocks")
+        return None
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(proxy_url.strip())
+        scheme = (parsed.scheme or "").lower()
+        host   = parsed.hostname
+        port   = parsed.port or (1080 if "socks" in scheme else 8080)
+        user   = parsed.username or None
+        pwd    = parsed.password or None
+        if scheme in ("socks5", "socks5h"):
+            proxy_type = _socks.SOCKS5
+        elif scheme in ("socks4", "socks4a"):
+            proxy_type = _socks.SOCKS4
+        elif scheme in ("http", "https"):
+            proxy_type = _socks.HTTP
+        else:
+            print(f"[OGOHLANTIRISH] Noma'lum proxy schema: {scheme} — proxy o'tkazib yuboriladi")
+            return None
+        # Telethon proxy tuple: (type, addr, port, rdns, username, password)
+        return (proxy_type, host, port, True, user, pwd)
+    except Exception as e:
+        print(f"[OGOHLANTIRISH] Proxy URL parse xatosi ({proxy_url!r}): {e}")
+        return None
+
+
+# UB1 (asosiy userbot) va bot uchun TelegramClient yaratish
+_ub1_proxy = _parse_proxy(_UB1_PROXY_URL)
+_ub1_kwargs = {"proxy": _ub1_proxy} if _ub1_proxy else {}
+userbot = TelegramClient(os.path.join(BASE_DIR, 'userbot_session'), API_ID, API_HASH, **_ub1_kwargs)
+bot     = TelegramClient(os.path.join(BASE_DIR, 'bot_session'),     API_ID, API_HASH)
+
 
 def _build_extra_userbots():
     """
@@ -115,12 +165,13 @@ def _build_extra_userbots():
         phone_key    = f"USERBOT{i}_PHONE"
         api_id_key   = f"USERBOT{i}_API_ID"
         api_hash_key = f"USERBOT{i}_API_HASH"
+        proxy_key    = f"USERBOT{i}_PROXY"
         session_name = f"userbot{i}_session"
         session_path = os.path.join(BASE_DIR, session_name)
-
         phone       = os.getenv(phone_key, "").strip()
         ub_api_id   = os.getenv(api_id_key, "").strip()
         ub_api_hash = os.getenv(api_hash_key, "").strip()
+        ub_proxy_url = os.getenv(proxy_key, "").strip()
         exists      = os.path.exists(session_path + '.session')
 
         if not phone and not exists:
@@ -134,7 +185,9 @@ def _build_extra_userbots():
             i += 1
             continue
 
-        ub = TelegramClient(session_path, int(ub_api_id), ub_api_hash)
+        ub_proxy = _parse_proxy(ub_proxy_url)
+        ub_kwargs = {"proxy": ub_proxy} if ub_proxy else {}
+        ub = TelegramClient(session_path, int(ub_api_id), ub_api_hash, **ub_kwargs)
         ub._ub_phone  = phone
         ub._ub_exists = exists
         ub._ub_idx    = i - 1
