@@ -16,47 +16,176 @@ DATABASE_URL = os.getenv("DATABASE_URL", "")
 _pg_pool = None
 
 
-def _to_pg_sql(sql: str) -> str:
-    """SQLite ? placeholderlarini PostgreSQL $1,$2... ga aylantiradi."""
+def _pg_placeholder(sql: str) -> str:
+    """SQLite ? placeholderlarini PostgreSQL $1,$2... ga aylantiradi (satr ichidagi ? o'tkazib yuboriladi)."""
     idx = 0
-    def _repl(_):
-        nonlocal idx
-        idx += 1
-        return f"${idx}"
-    return re.sub(r'\?', _repl, sql)
+    result = []
+    in_str = False
+    str_char = None
+    for c in sql:
+        if in_str:
+            result.append(c)
+            if c == str_char:
+                in_str = False
+        elif c in ("'", '"'):
+            in_str = True
+            str_char = c
+            result.append(c)
+        elif c == '?':
+            idx += 1
+            result.append(f'${idx}')
+        else:
+            result.append(c)
+    return ''.join(result)
 
 
 def _adapt_sql(sql: str) -> str:
-    """SQLite-spesifik SQL ni PostgreSQL ga moslashtiradi."""
-    sql = _to_pg_sql(sql)
-    sql = re.sub(r'\bINSERT OR IGNORE\b', 'INSERT', sql, flags=re.IGNORECASE)
-    sql = re.sub(r'\bINSERT OR REPLACE\b', 'INSERT', sql, flags=re.IGNORECASE)
-    sql = re.sub(r'ON CONFLICT\s*\(\s*\)\s*DO\s+\w+', '', sql, flags=re.IGNORECASE)
-    sql = sql.replace("datetime('now')", "NOW()")
-    sql = re.sub(r'INTEGER PRIMARY KEY AUTOINCREMENT', 'BIGSERIAL PRIMARY KEY', sql, flags=re.IGNORECASE)
+    """
+    SQLite-spesifik SQL ni PostgreSQL ga moslashtiradi.
+    Bo'sh satr qaytarsa — bu so'rovni o'tkazib yuborish kerak.
+    """
+    # PRAGMA → o'tkazib yuborish
+    if re.match(r'^\s*PRAGMA\b', sql, re.IGNORECASE):
+        return ""
+    # CREATE VIRTUAL TABLE (FTS5) → o'tkazib yuborish
+    if re.search(r'CREATE\s+VIRTUAL\s+TABLE', sql, re.IGNORECASE):
+        return ""
+    # CREATE TRIGGER → o'tkazib yuborish
+    if re.match(r'^\s*CREATE\s+TRIGGER\b', sql, re.IGNORECASE):
+        return ""
+    # messages_fts ga tegishli DML → o'tkazib yuborish
+    if re.search(r'\bmessages_fts\b', sql, re.IGNORECASE):
+        return ""
+
+    sql = re.sub(r'\bINTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT\b',
+                 'BIGSERIAL PRIMARY KEY', sql, flags=re.IGNORECASE)
+    sql = re.sub(r"datetime\s*\(\s*'now'\s*\)", "to_char(NOW(),'YYYY-MM-DD HH24:MI:SS')", sql, flags=re.IGNORECASE)
+
+    # INSERT OR IGNORE → INSERT ... ON CONFLICT DO NOTHING
+    had_ignore = bool(re.search(r'\bINSERT\s+OR\s+IGNORE\b', sql, re.IGNORECASE))
+    sql = re.sub(r'\bINSERT\s+OR\s+IGNORE\b', 'INSERT', sql, flags=re.IGNORECASE)
+
+    # INSERT OR REPLACE → INSERT ... ON CONFLICT (jadvalga qarab)
+    had_replace = bool(re.search(r'\bINSERT\s+OR\s+REPLACE\b', sql, re.IGNORECASE))
+    if had_replace:
+        sql = re.sub(r'\bINSERT\s+OR\s+REPLACE\b', 'INSERT', sql, flags=re.IGNORECASE)
+        sql = _upsert_suffix(sql)
+    elif had_ignore:
+        sql = sql.rstrip().rstrip(';') + ' ON CONFLICT DO NOTHING'
+
+    sql = _pg_placeholder(sql)
     return sql
 
 
+def _upsert_suffix(sql: str) -> str:
+    """INSERT OR REPLACE uchun ON CONFLICT ... DO UPDATE SET qo'shadi."""
+    if re.search(r'INTO\s+scanned_channels\b', sql, re.IGNORECASE):
+        return sql.rstrip().rstrip(';') + ' ON CONFLICT (channel_id) DO UPDATE SET scanned_at=EXCLUDED.scanned_at'
+    if re.search(r'INTO\s+channel_assignments\b', sql, re.IGNORECASE):
+        return sql.rstrip().rstrip(';') + ' ON CONFLICT (channel_link) DO NOTHING'
+    if re.search(r'INTO\s+resolved_channel_ids\b', sql, re.IGNORECASE):
+        return sql.rstrip().rstrip(';') + (
+            ' ON CONFLICT (channel_link) DO UPDATE SET '
+            'numeric_id=EXCLUDED.numeric_id, resolved_at=EXCLUDED.resolved_at, '
+            'channel_name=EXCLUDED.channel_name'
+        )
+    if re.search(r'INTO\s+users_memory_bank\b', sql, re.IGNORECASE):
+        return sql.rstrip().rstrip(';') + (
+            ' ON CONFLICT (user_id, group_link) DO UPDATE SET '
+            'first_name=EXCLUDED.first_name, last_name=EXCLUDED.last_name, '
+            'username=EXCLUDED.username, phone=EXCLUDED.phone, birth_date=EXCLUDED.birth_date, '
+            'bio=EXCLUDED.bio, open_channels=EXCLUDED.open_channels, has_hidden=EXCLUDED.has_hidden, '
+            'added_date=EXCLUDED.added_date, last_updated=EXCLUDED.last_updated'
+        )
+    if re.search(r'INTO\s+source_sync_state\b', sql, re.IGNORECASE):
+        return sql.rstrip().rstrip(';') + (
+            ' ON CONFLICT (source) DO UPDATE SET '
+            'last_msg_id=EXCLUDED.last_msg_id, last_synced=EXCLUDED.last_synced'
+        )
+    if re.search(r'INTO\s+music_scan_state\b', sql, re.IGNORECASE):
+        return sql.rstrip().rstrip(';') + ' ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value'
+    return sql.rstrip().rstrip(';') + ' ON CONFLICT DO NOTHING'
+
+
 class _PGCursor:
-    """asyncpg ni aiosqlite cursor kabi ko'rsatadi."""
+    """asyncpg natijasini aiosqlite cursor kabi ko'rsatadi."""
+    __slots__ = ('_rows', 'lastrowid')
+
     def __init__(self, rows, lastrowid=None):
-        self._rows = rows
+        self._rows = [tuple(r) for r in (rows or [])]
         self.lastrowid = lastrowid
 
     async def fetchone(self):
-        if not self._rows:
-            return None
-        row = self._rows[0]
-        return tuple(row.values()) if hasattr(row, 'values') else tuple(row)
+        return self._rows[0] if self._rows else None
 
     async def fetchall(self):
-        result = []
-        for row in (self._rows or []):
-            result.append(tuple(row.values()) if hasattr(row, 'values') else tuple(row))
-        return result
+        return self._rows
 
     async def __aenter__(self):
         return self
+
+    async def __aexit__(self, *_):
+        pass
+
+
+class _PGExecAwaitable:
+    """
+    execute() uchun obyekt.
+    Ikkala ishlatish usulini qo'llab-quvvatlaydi:
+      await db.execute(sql, params)          → _PGCursor
+      async with db.execute(sql, params) as cur: → _PGCursor
+      (await db.execute(sql)).fetchone()     → natija
+    """
+    __slots__ = ('_conn', '_sql_raw', '_params', '_result')
+
+    def __init__(self, conn, sql, params):
+        self._conn = conn
+        self._sql_raw = sql
+        self._params = list(params) if params else []
+        self._result = None
+
+    async def _run(self) -> '_PGCursor':
+        if self._result is not None:
+            return self._result
+        pg_sql = _adapt_sql(self._sql_raw)
+        if not pg_sql.strip():
+            self._result = _PGCursor([])
+            return self._result
+
+        is_insert = bool(re.match(r'^\s*INSERT\b', pg_sql, re.IGNORECASE))
+        needs_ret = (
+            is_insert
+            and 'RETURNING' not in pg_sql.upper()
+            and 'ON CONFLICT DO NOTHING' not in pg_sql.upper()
+        )
+
+        if needs_ret:
+            try:
+                ret_sql = pg_sql.rstrip().rstrip(';') + ' RETURNING id'
+                rows = await self._conn.fetch(ret_sql, *self._params)
+                rid = rows[0]['id'] if rows else None
+                self._result = _PGCursor(rows, lastrowid=rid)
+                return self._result
+            except Exception:
+                pass
+
+        try:
+            upper = pg_sql.upper().strip()
+            if upper.startswith('SELECT') or 'RETURNING' in upper:
+                rows = await self._conn.fetch(pg_sql, *self._params)
+                self._result = _PGCursor(rows)
+            else:
+                await self._conn.execute(pg_sql, *self._params)
+                self._result = _PGCursor([])
+        except Exception:
+            self._result = _PGCursor([])
+        return self._result
+
+    def __await__(self):
+        return self._run().__await__()
+
+    async def __aenter__(self):
+        return await self._run()
 
     async def __aexit__(self, *_):
         pass
@@ -73,16 +202,17 @@ class _PGConn:
         await self._tr.start()
 
     def execute(self, sql, params=()):
-        return _PGExecCtx(self._conn, sql, params)
+        return _PGExecAwaitable(self._conn, sql, params)
 
     async def executemany(self, sql, params_list):
         pg_sql = _adapt_sql(sql)
-        # ON CONFLICT DO NOTHING qo'shish (INSERT OR IGNORE/REPLACE uchun)
-        if 'INSERT' in pg_sql.upper() and 'ON CONFLICT' not in pg_sql.upper():
-            pg_sql = pg_sql.rstrip().rstrip(';') + ' ON CONFLICT DO NOTHING'
+        if not pg_sql.strip():
+            return
+        # RETURNING ni olib tashlaymiz
+        pg_sql = re.sub(r'\s+RETURNING\s+\w+\s*$', '', pg_sql, flags=re.IGNORECASE)
         for params in params_list:
             try:
-                await self._conn.execute(pg_sql, *params)
+                await self._conn.execute(pg_sql, *list(params))
             except Exception:
                 pass
 
@@ -97,41 +227,11 @@ class _PGConn:
             await self._tr.rollback()
 
 
-class _PGExecCtx:
-    """execute() uchun context manager — cursor ni qaytaradi."""
-    def __init__(self, conn, sql, params):
-        self._conn = conn
-        self._sql  = _adapt_sql(sql)
-        self._params = params
-        self._cursor = None
-
-    async def __aenter__(self):
-        pg_sql = self._sql
-        # INSERT uchun ON CONFLICT DO NOTHING
-        upper = pg_sql.upper()
-        if 'INSERT' in upper and 'ON CONFLICT' not in upper:
-            pg_sql = pg_sql.rstrip().rstrip(';') + ' ON CONFLICT DO NOTHING'
-        try:
-            if 'RETURNING' in upper or upper.strip().startswith('SELECT'):
-                rows = await self._conn.fetch(pg_sql, *self._params)
-                self._cursor = _PGCursor(rows)
-            else:
-                result = await self._conn.execute(pg_sql, *self._params)
-                # lastrowid uchun RETURNING id qo'shilmagan — 0 qaytaradi
-                self._cursor = _PGCursor([], lastrowid=0)
-        except Exception as e:
-            self._cursor = _PGCursor([])
-        return self._cursor
-
-    async def __aexit__(self, *_):
-        pass
-
-
 async def _get_pg_pool():
     global _pg_pool
     if _pg_pool is None:
         import asyncpg
-        _pg_pool = await asyncpg.create_pool(DATABASE_URL, min_size=5, max_size=20)
+        _pg_pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=20)
     return _pg_pool
 
 
@@ -415,13 +515,30 @@ async def init_db():
             pass
         await db.commit()
 
-    # FTS5 indeks bo'sh bo'lsa — background rebuild (bir martalik)
+    # PostgreSQL: tsvector GIN indeks qo'shamiz (FTS5 o'rniga)
+    if DATABASE_URL:
+        async with connect() as db:
+            try:
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_mc_text_fts ON messages_cache
+                    USING gin(to_tsvector('simple',
+                        COALESCE(text,'') || ' ' ||
+                        COALESCE(sender_name,'') || ' ' ||
+                        COALESCE(sender_username,'')))
+                """)
+                await db.commit()
+            except Exception as e:
+                print(f"[PG] GIN indeks yaratishda xato (e'tiborsiz): {e}")
+
+    # FTS5 indeks bo'sh bo'lsa — background rebuild (bir martalik, faqat SQLite)
     import asyncio
     asyncio.create_task(_fts_rebuild_if_needed())
 
 
 async def _fts_rebuild_if_needed():
-    """FTS5 indexi bo'sh bo'lsa mavjud messages_cache dan bir martalik rebuild."""
+    """FTS5 indexi bo'sh bo'lsa mavjud messages_cache dan bir martalik rebuild (faqat SQLite)."""
+    if DATABASE_URL:
+        return
     import asyncio
     await asyncio.sleep(5)  # DB to'liq ochilsin
     try:
