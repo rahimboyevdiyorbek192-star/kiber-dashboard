@@ -26,7 +26,7 @@ SCANNING = False  # Fon skanerlash holati
 # ─────────────────────────────────────────────────────────────────────
 
 async def init_music_db():
-    async with aiosqlite.connect(MUSIC_DB, timeout=30) as db:
+    async with db_mod.connect(MUSIC_DB, timeout=30) as db:
         await db.execute("PRAGMA journal_mode=WAL")
         await db.execute("PRAGMA synchronous=NORMAL")
         await db.execute("PRAGMA cache_size=-32000")
@@ -64,7 +64,7 @@ async def init_music_db():
 async def save_fingerprint(channel_id, channel_name, file_name, fingerprint, duration):
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     try:
-        async with aiosqlite.connect(MUSIC_DB, timeout=30) as db:
+        async with db_mod.connect(MUSIC_DB, timeout=30) as db:
             await db.execute(
                 "INSERT INTO music_fingerprints "
                 "(channel_id, channel_name, file_name, fingerprint, duration, added_date) "
@@ -78,7 +78,7 @@ async def save_fingerprint(channel_id, channel_name, file_name, fingerprint, dur
 
 async def mark_channel_scanned(channel_id):
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    async with aiosqlite.connect(MUSIC_DB, timeout=30) as db:
+    async with db_mod.connect(MUSIC_DB, timeout=30) as db:
         await db.execute(
             "INSERT OR REPLACE INTO scanned_channels (channel_id, scanned_at) VALUES (?, ?)",
             (str(channel_id), now)
@@ -87,7 +87,7 @@ async def mark_channel_scanned(channel_id):
 
 
 async def is_channel_scanned(channel_id):
-    async with aiosqlite.connect(MUSIC_DB, timeout=30) as db:
+    async with db_mod.connect(MUSIC_DB, timeout=30) as db:
         async with db.execute(
             "SELECT 1 FROM scanned_channels WHERE channel_id=?", (str(channel_id),)
         ) as cur:
@@ -96,7 +96,7 @@ async def is_channel_scanned(channel_id):
 
 async def get_stats():
     await init_music_db()
-    async with aiosqlite.connect(MUSIC_DB, timeout=30) as db:
+    async with db_mod.connect(MUSIC_DB, timeout=30) as db:
         total_fp    = (await (await db.execute("SELECT COUNT(*) FROM music_fingerprints")).fetchone())[0]
         total_ch    = (await (await db.execute("SELECT COUNT(DISTINCT channel_id) FROM music_fingerprints")).fetchone())[0]
     return total_fp, total_ch
@@ -293,7 +293,7 @@ async def get_all_sources():
     """
     await init_music_db()
     sources = set()
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         # 1. users_memory_bank dan guruh linklarni
         async with db.execute(
             "SELECT DISTINCT group_link FROM users_memory_bank "
@@ -478,7 +478,7 @@ async def search_music(audio_path, threshold=0.70):
     BATCH_SIZE = 500
     # Query fingerprint bir marta parse qilinadi — loop tashqarisida
     arr_query_parsed = parse_fingerprint(fp_query)
-    async with aiosqlite.connect(MUSIC_DB, timeout=30) as db:
+    async with db_mod.connect(MUSIC_DB, timeout=30) as db:
         offset = 0
         while True:
             async with db.execute(
@@ -515,7 +515,7 @@ async def stop_scanning():
 async def add_watch_music(fingerprint, duration, name, admin_id):
     """Kuzatiladigan musiqa qo'shish."""
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    async with aiosqlite.connect(MUSIC_DB, timeout=30) as db:
+    async with db_mod.connect(MUSIC_DB, timeout=30) as db:
         await db.execute(
             "INSERT INTO watch_fingerprints (name, fingerprint, duration, admin_id, added_date) "
             "VALUES (?, ?, ?, ?, ?)",
@@ -526,7 +526,7 @@ async def add_watch_music(fingerprint, duration, name, admin_id):
 
 async def get_watch_list():
     """Kuzatiladigan musiqalar ro'yxati."""
-    async with aiosqlite.connect(MUSIC_DB, timeout=30) as db:
+    async with db_mod.connect(MUSIC_DB, timeout=30) as db:
         async with db.execute(
             "SELECT id, name, added_date FROM watch_fingerprints ORDER BY id DESC"
         ) as cur:
@@ -535,7 +535,7 @@ async def get_watch_list():
 
 async def delete_watch_music(music_id):
     """Kuzatiladigan musiqani o'chirish."""
-    async with aiosqlite.connect(MUSIC_DB, timeout=30) as db:
+    async with db_mod.connect(MUSIC_DB, timeout=30) as db:
         await db.execute("DELETE FROM watch_fingerprints WHERE id=?", (music_id,))
         await db.commit()
 
@@ -547,7 +547,7 @@ async def check_against_watch_list(fingerprint, threshold=0.70):
     """
     await init_music_db()
     results = []
-    async with aiosqlite.connect(MUSIC_DB, timeout=30) as db:
+    async with db_mod.connect(MUSIC_DB, timeout=30) as db:
         async with db.execute(
             "SELECT id, name, fingerprint, admin_id FROM watch_fingerprints"
         ) as cur:
@@ -573,7 +573,7 @@ async def save_watch_alert_log(watch_name, source_name, source_id, source_type, 
     """Topilgan musiqa arxivga saqlanadi."""
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     await init_music_db()
-    async with aiosqlite.connect(MUSIC_DB, timeout=30) as db:
+    async with db_mod.connect(MUSIC_DB, timeout=30) as db:
         await db.execute(
             "CREATE TABLE IF NOT EXISTS watch_alerts_log "
             "(id INTEGER PRIMARY KEY AUTOINCREMENT, watch_name TEXT, "
@@ -592,7 +592,7 @@ async def save_watch_alert_log(watch_name, source_name, source_id, source_type, 
 async def get_watch_alerts_log(watch_name=None, limit=50):
     """Arxivdan topilganlarni olish."""
     await init_music_db()
-    async with aiosqlite.connect(MUSIC_DB, timeout=30) as db:
+    async with db_mod.connect(MUSIC_DB, timeout=30) as db:
         await db.execute(
             "CREATE TABLE IF NOT EXISTS watch_alerts_log "
             "(id INTEGER PRIMARY KEY AUTOINCREMENT, watch_name TEXT, "
@@ -620,7 +620,7 @@ async def get_watch_alerts_log(watch_name=None, limit=50):
 async def is_profile_music_saved(user_id, fingerprint):
     """Profil musiqasi allaqachon bazada borligini tekshiradi."""
     await init_music_db()
-    async with aiosqlite.connect(MUSIC_DB, timeout=30) as db:
+    async with db_mod.connect(MUSIC_DB, timeout=30) as db:
         async with db.execute(
             "SELECT fingerprint FROM music_fingerprints "
             "WHERE channel_id=? AND file_name LIKE 'profile_%'",

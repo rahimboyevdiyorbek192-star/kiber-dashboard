@@ -1,13 +1,25 @@
 # database.py
 import os
 import aiosqlite
+from contextlib import asynccontextmanager
 from datetime import datetime
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_NAME  = os.path.join(BASE_DIR, "cyber_station.db")
 
+
+@asynccontextmanager
+async def connect(db_path=None, timeout=30):
+    """Yagona ulanish helperi — HAR BIR connection uchun busy_timeout
+    o'rnatadi. Aks holda 'database is locked' xatosi darrov chiqadi
+    (busy_timeout per-connection sozlama, defaulti 0)."""
+    async with aiosqlite.connect(db_path or DB_NAME, timeout=timeout) as db:
+        await db.execute("PRAGMA busy_timeout=30000")
+        await db.execute("PRAGMA synchronous=NORMAL")
+        yield db
+
 async def init_db():
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         await db.execute("PRAGMA journal_mode=WAL")
         await db.execute("PRAGMA synchronous=NORMAL")
         await db.execute("PRAGMA cache_size=-32000")
@@ -273,7 +285,7 @@ async def _fts_rebuild_if_needed():
     import asyncio
     await asyncio.sleep(5)  # DB to'liq ochilsin
     try:
-        async with aiosqlite.connect(DB_NAME, timeout=120) as db:
+        async with connect(DB_NAME, timeout=120) as db:
             # FTS5 da yozuv bormi?
             async with db.execute("SELECT rowid FROM messages_fts LIMIT 1") as cur:
                 fts_row = await cur.fetchone()
@@ -297,34 +309,34 @@ async def _fts_rebuild_if_needed():
 # ─────────────────────────────────────────────────────────────────────
 
 async def add_admin(admin_id: int):
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         await db.execute(
             "INSERT OR IGNORE INTO trusted_admins (admin_id) VALUES (?)", (admin_id,)
         )
         await db.commit()
 
 async def remove_admin(admin_id: int):
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         await db.execute("DELETE FROM trusted_admins WHERE admin_id=?", (admin_id,))
         await db.commit()
 
 async def is_admin(admin_id: int, super_admin_id: int) -> bool:
     if admin_id == super_admin_id:
         return True
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         async with db.execute(
             "SELECT 1 FROM trusted_admins WHERE admin_id=?", (admin_id,)
         ) as cur:
             return await cur.fetchone() is not None
 
 async def get_all_admins():
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         async with db.execute("SELECT admin_id FROM trusted_admins ORDER BY admin_id") as cur:
             return await cur.fetchall()
 
 async def update_user_changes(user_id: int, bio: str, open_channels: str, has_hidden: str):
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         await db.execute(
             "UPDATE users_memory_bank "
             "SET bio=?, open_channels=?, has_hidden=?, last_updated=? "
@@ -336,7 +348,7 @@ async def update_user_changes(user_id: int, bio: str, open_channels: str, has_hi
 async def save_user_to_bank(user_id, group_link, f_name, l_name, uname,
                              phone, b_date, bio, o_chan, h_hidden):
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         async with db.execute(
             "SELECT added_date, first_name, last_name, username, phone, bio "
             "FROM users_memory_bank WHERE user_id=? AND group_link=?",
@@ -378,7 +390,7 @@ async def save_user_to_bank(user_id, group_link, f_name, l_name, uname,
 # ─────────────────────────────────────────────────────────────────────
 
 async def create_scan_session(target_group, output_path, sender_id):
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         cur = await db.execute(
             "INSERT INTO scan_resume (target_group, output_path, last_offset, "
             "total_count, sender_id, status, started_at) VALUES (?,?,0,0,?,?,?)",
@@ -389,7 +401,7 @@ async def create_scan_session(target_group, output_path, sender_id):
         return cur.lastrowid
 
 async def update_scan_progress(scan_id, last_offset, total_count):
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         await db.execute(
             "UPDATE scan_resume SET last_offset=?, total_count=? WHERE scan_id=?",
             (last_offset, total_count, scan_id)
@@ -397,14 +409,14 @@ async def update_scan_progress(scan_id, last_offset, total_count):
         await db.commit()
 
 async def finish_scan_session(scan_id, status='done'):
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         await db.execute(
             "UPDATE scan_resume SET status=? WHERE scan_id=?", (status, scan_id)
         )
         await db.commit()
 
 async def get_pending_scans():
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         async with db.execute(
             "SELECT scan_id, target_group, output_path, last_offset, "
             "total_count, sender_id FROM scan_resume WHERE status='running'"
@@ -417,7 +429,7 @@ async def get_pending_scans():
 # ─────────────────────────────────────────────────────────────────────
 
 async def get_user_change_log(user_id: int, limit: int = 50):
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         async with db.execute(
             "SELECT field_name, old_value, new_value, changed_at "
             "FROM user_change_log WHERE user_id=? "
@@ -432,7 +444,7 @@ async def get_user_change_log(user_id: int, limit: int = 50):
 # ─────────────────────────────────────────────────────────────────────
 
 async def add_alert(admin_id: int, keyword: str, target_groups: str = '') -> int:
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         cur = await db.execute(
             "INSERT INTO keyword_alerts (admin_id, keyword, target_groups) VALUES (?,?,?)",
             (admin_id, keyword.lower().strip(), target_groups)
@@ -441,7 +453,7 @@ async def add_alert(admin_id: int, keyword: str, target_groups: str = '') -> int
         return cur.lastrowid
 
 async def list_alerts(admin_id: int = None):
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         if admin_id:
             async with db.execute(
                 "SELECT id, keyword, target_groups, is_active, created_at "
@@ -456,19 +468,19 @@ async def list_alerts(admin_id: int = None):
             return await cur.fetchall()
 
 async def delete_alert(alert_id: int):
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         await db.execute("DELETE FROM keyword_alerts WHERE id=?", (alert_id,))
         await db.commit()
 
 async def toggle_alert(alert_id: int, is_active: int):
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         await db.execute(
             "UPDATE keyword_alerts SET is_active=? WHERE id=?", (is_active, alert_id)
         )
         await db.commit()
 
 async def get_active_alerts():
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         async with db.execute(
             "SELECT id, admin_id, keyword, target_groups "
             "FROM keyword_alerts WHERE is_active=1"
@@ -476,7 +488,7 @@ async def get_active_alerts():
             return await cur.fetchall()
 
 async def check_and_record_alert_hit(alert_id: int, msg_id: int, source: str, sender_id: int) -> bool:
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         async with db.execute(
             "SELECT 1 FROM alert_hits WHERE alert_id=? AND msg_id=? AND source=?",
             (alert_id, msg_id, source)
@@ -499,7 +511,7 @@ async def check_and_record_alert_hit(alert_id: int, msg_id: int, source: str, se
 # ─────────────────────────────────────────────────────────────────────
 
 async def create_investigation(name: str, creator_id: int) -> int:
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         cur = await db.execute(
             "INSERT INTO investigations (name, creator_id) VALUES (?,?)",
             (name, creator_id)
@@ -508,7 +520,7 @@ async def create_investigation(name: str, creator_id: int) -> int:
         return cur.lastrowid
 
 async def get_investigations(creator_id: int = None):
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         if creator_id:
             async with db.execute(
                 "SELECT id, name, creator_id, notes, created_at "
@@ -523,7 +535,7 @@ async def get_investigations(creator_id: int = None):
             return await cur.fetchall()
 
 async def add_investigation_target(inv_id: int, target_type: str, target_value: str, notes: str = '') -> int:
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         cur = await db.execute(
             "INSERT INTO investigation_targets (inv_id, target_type, target_value, notes) "
             "VALUES (?,?,?,?)",
@@ -533,7 +545,7 @@ async def add_investigation_target(inv_id: int, target_type: str, target_value: 
         return cur.lastrowid
 
 async def get_investigation_targets(inv_id: int):
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         async with db.execute(
             "SELECT id, target_type, target_value, notes, added_at "
             "FROM investigation_targets WHERE inv_id=? ORDER BY added_at",
@@ -542,13 +554,13 @@ async def get_investigation_targets(inv_id: int):
             return await cur.fetchall()
 
 async def delete_investigation(inv_id: int):
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         await db.execute("DELETE FROM investigation_targets WHERE inv_id=?", (inv_id,))
         await db.execute("DELETE FROM investigations WHERE id=?", (inv_id,))
         await db.commit()
 
 async def update_investigation_notes(inv_id: int, notes: str):
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         await db.execute(
             "UPDATE investigations SET notes=? WHERE id=?", (notes, inv_id)
         )
@@ -561,7 +573,7 @@ async def update_investigation_notes(inv_id: int, notes: str):
 
 async def get_channel_userbot(channel_link: str) -> int | None:
     """Kanal qaysi userbotga biriktirilganini qaytaradi. Yo'q bo'lsa None."""
-    async with aiosqlite.connect(DB_NAME, timeout=10) as db:
+    async with connect(DB_NAME, timeout=10) as db:
         async with db.execute(
             "SELECT userbot_idx FROM channel_assignments WHERE channel_link=?",
             (channel_link,)
@@ -575,7 +587,7 @@ async def assign_channel(channel_link: str, n_userbots: int) -> int:
     Allaqachon biriktirilgan bo'lsa — o'zgartirmaydi.
     Qaytaradi: biriktirilgan userbot idx.
     """
-    async with aiosqlite.connect(DB_NAME, timeout=10) as db:
+    async with connect(DB_NAME, timeout=10) as db:
         # Allaqachon bor?
         async with db.execute(
             "SELECT userbot_idx FROM channel_assignments WHERE channel_link=?",
@@ -606,7 +618,7 @@ async def assign_channel(channel_link: str, n_userbots: int) -> int:
 
 async def get_userbot_channels(userbot_idx: int) -> list:
     """Userbotga biriktirilgan barcha kanallar ro'yxatini qaytaradi."""
-    async with aiosqlite.connect(DB_NAME, timeout=10) as db:
+    async with connect(DB_NAME, timeout=10) as db:
         async with db.execute(
             "SELECT channel_link FROM channel_assignments WHERE userbot_idx=? ORDER BY assigned_at",
             (userbot_idx,)
@@ -622,7 +634,7 @@ async def reassign_channels(n_userbots: int):
       - egasi yo'qolgan kanallar (userbot_idx >= n) qayta tarqatiladi
       - yangilari assign_channel orqali eng bo'sh UB ga ketadi
     """
-    async with aiosqlite.connect(DB_NAME, timeout=30) as db:
+    async with connect(DB_NAME, timeout=30) as db:
         # 1. Hozirgi taqsimotni hisoblash (faqat n ichidagilar)
         counts = [0] * n_userbots
         orphans = []

@@ -485,7 +485,7 @@ async def _pc_link_cached(ub, pc, chats=None) -> str:
                     _pc_link_cache[pc_int] = _link
                     try:
                         _now = datetime.now().strftime("%Y-%m-%d %H:%M")
-                        async with aiosqlite.connect(db_mod.DB_NAME, timeout=5) as _db:
+                        async with db_mod.connect(db_mod.DB_NAME, timeout=5) as _db:
                             await _db.execute(
                                 "INSERT OR REPLACE INTO resolved_channel_ids "
                                 "(channel_link, numeric_id, resolved_at) VALUES (?, ?, ?)",
@@ -501,7 +501,7 @@ async def _pc_link_cached(ub, pc, chats=None) -> str:
         return _pc_link_cache[pc_int]
     # 2. DB keshi — avval username-li havola saqlangan bo'lsa, API shart emas
     try:
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=5) as _db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=5) as _db:
             async with _db.execute(
                 "SELECT channel_link FROM resolved_channel_ids WHERE numeric_id=?",
                 (f"-100{pc_int}",)
@@ -520,7 +520,7 @@ async def _pc_link_cached(ub, pc, chats=None) -> str:
         if uname:
             link = f"https://t.me/{uname}"
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=5) as _db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=5) as _db:
             await _db.execute(
                 "INSERT OR REPLACE INTO resolved_channel_ids "
                 "(channel_link, numeric_id, resolved_at) VALUES (?, ?, ?)",
@@ -542,7 +542,7 @@ async def _save_pc_id_to_cache(pc: int):
     """
     try:
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=5) as _db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=5) as _db:
             await _db.execute(
                 "INSERT OR REPLACE INTO resolved_channel_ids "
                 "(channel_link, numeric_id, resolved_at) VALUES (?, ?, ?)",
@@ -571,7 +571,7 @@ async def _resolve_pc_link(ub, ch_id: int) -> str:
             link = f"https://t.me/{uname}"
         # DB ga ham saqlash
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=5) as _db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=5) as _db:
             await _db.execute(
                 "INSERT OR REPLACE INTO resolved_channel_ids "
                 "(channel_link, numeric_id, resolved_at) VALUES (?, ?, ?)",
@@ -600,7 +600,7 @@ async def resolve_personal_channel(userbot, ch_id):
             _link_key = str(ch_id)
             now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
             try:
-                async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+                async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                     await _db.execute(
                         "INSERT OR REPLACE INTO resolved_channel_ids "
                         "(channel_link, numeric_id, resolved_at) VALUES (?, ?, ?)",
@@ -704,7 +704,7 @@ async def _ds_process_user(ub, user, target_group):
         inv = extract_invite_links(bio)
         if inv:
             maxfiy = ", ".join(inv)
-            async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as _db:
+            async with db_mod.connect(db_mod.DB_NAME, timeout=30) as _db:
                 for lnk in inv:
                     await _db.execute(
                         "INSERT OR IGNORE INTO hidden_channel_knocker "
@@ -875,7 +875,7 @@ async def _deep_scan_parallel(all_bots, target_group, output_path, status_msg, s
                         )
                         if len(cache_batch) >= 500:
                             try:
-                                async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+                                async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                                     await _db.executemany(
                                         "INSERT OR IGNORE INTO messages_cache "
                                         "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
@@ -892,7 +892,7 @@ async def _deep_scan_parallel(all_bots, target_group, output_path, status_msg, s
                 _dbg("_deep_scan_parallel_p2", e)
             if cache_batch:
                 try:
-                    async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+                    async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                         await _db.executemany(
                             "INSERT OR IGNORE INTO messages_cache "
                             "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
@@ -1118,7 +1118,7 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
                                 if pc:
                                     _shaxsiy = await _pc_link_cached(userbot, pc, chats=getattr(fi, 'chats', None))
                                 if inv:
-                                    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as _db:
+                                    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as _db:
                                         for lnk in inv:
                                             await _db.execute(
                                                 "INSERT OR IGNORE INTO hidden_channel_knocker "
@@ -1172,7 +1172,7 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
                     # Har 1000 xabarda batch-insert
                     if len(_cache_batch) >= 1000:
                         try:
-                            async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+                            async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                                 await _db.executemany(
                                     "INSERT OR IGNORE INTO messages_cache "
                                     "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
@@ -1204,7 +1204,7 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
         # Qolgan kesh batchni saqlash
         if _cache_batch:
             try:
-                async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+                async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                     await _db.executemany(
                         "INSERT OR IGNORE INTO messages_cache "
                         "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
@@ -1263,7 +1263,7 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
                 if pc:
                     shaxsiy = await _pc_link_cached(userbot, pc, chats=getattr(fi, 'chats', None))
                 if inv:
-                    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as _db:
+                    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as _db:
                         for lnk in inv:
                             await _db.execute(
                                 "INSERT OR IGNORE INTO hidden_channel_knocker "
@@ -1383,7 +1383,7 @@ async def _resume_scan_task(userbot, bot, sender_id, target_group,
             userbot, target_group, output_path, status_msg,
             resume_offset=last_offset, resume_count=total_count, scan_id=scan_id
         )
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
             await db.execute(
                 "INSERT INTO archive_bin (file_name, file_path, created_date) VALUES (?, ?, ?)",
                 (os.path.basename(output_path), output_path,
@@ -1431,7 +1431,7 @@ async def background_profile_tracker(userbot, ub_idx: int = 0, n_userbots: int =
 
     # Har userbot uchun alohida offset key
     _offset_key = f"profile_offset_{ub_idx}"
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         await db.execute(
             "CREATE TABLE IF NOT EXISTS tracker_state "
             "(key TEXT PRIMARY KEY, value TEXT)"
@@ -1448,7 +1448,7 @@ async def background_profile_tracker(userbot, ub_idx: int = 0, n_userbots: int =
             await asyncio.sleep(15)
             continue
         try:
-            async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+            async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
                 # bio/has_hidden ham partiya so'rovida olinadi — har user uchun
                 # alohida SELECT ochilmaydi (DB ulanishlar kamayadi)
                 if n_userbots > 1:
@@ -1470,7 +1470,7 @@ async def background_profile_tracker(userbot, ub_idx: int = 0, n_userbots: int =
 
             if not users:
                 offset = 0
-                async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+                async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
                     await db.execute(
                         "INSERT OR REPLACE INTO tracker_state (key, value) VALUES (?, '0')",
                         (_offset_key,)
@@ -1505,7 +1505,7 @@ async def background_profile_tracker(userbot, ub_idx: int = 0, n_userbots: int =
                     _u_obj = (getattr(fi, 'users', None) or [None])[0]
                     if _u_obj is not None and getattr(_u_obj, 'deleted', False):
                         try:
-                            async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _ddb:
+                            async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _ddb:
                                 await _ddb.execute(
                                     "DELETE FROM users_memory_bank WHERE user_id=?", (uid,)
                                 )
@@ -1543,7 +1543,7 @@ async def background_profile_tracker(userbot, ub_idx: int = 0, n_userbots: int =
                                 if _title or _perf:
                                     _meta = f"🎵 Profil musiqasi: {_perf} - {_title}".strip(" -")
                                     _now = datetime.now().strftime("%Y-%m-%d %H:%M")
-                                    async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _mdb:
+                                    async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _mdb:
                                         await _mdb.execute(
                                             "INSERT OR IGNORE INTO messages_cache "
                                             "(msg_id, source, sender_id, sender_name, sender_username, text, msg_date) "
@@ -1600,7 +1600,7 @@ async def background_profile_tracker(userbot, ub_idx: int = 0, n_userbots: int =
                     has_hidden   = "❌"
                     if invite_links:
                         has_hidden = ", ".join(invite_links)
-                        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+                        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
                             for inv_link in invite_links:
                                 await db.execute(
                                     "INSERT OR IGNORE INTO hidden_channel_knocker "
@@ -1620,7 +1620,7 @@ async def background_profile_tracker(userbot, ub_idx: int = 0, n_userbots: int =
                     if bio_changed or hidden_changed:
                         await db_mod.update_user_changes(uid, bio, open_ch, has_hidden)
                     else:
-                        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+                        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
                             await db.execute(
                                 "UPDATE users_memory_bank SET bio=?, open_channels=? WHERE user_id=?",
                                 (bio, open_ch, uid)
@@ -1644,7 +1644,7 @@ async def background_profile_tracker(userbot, ub_idx: int = 0, n_userbots: int =
 
             offset += batch_size
             try:
-                async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+                async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
                     await db.execute(
                         "INSERT OR REPLACE INTO tracker_state (key, value) VALUES (?, ?)",
                         (_offset_key, str(offset))
@@ -1703,7 +1703,7 @@ async def _read_msg_chunk(ub, entity, add_offset: int, limit: int,
                 local_cache.append((msg.id, src_str, s_id, s_name, s_un, _mc_text[:2000], msg_dt))
                 if len(local_cache) >= 300:
                     try:
-                        async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+                        async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                             await _db.executemany(
                                 "INSERT OR IGNORE INTO messages_cache "
                                 "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
@@ -1721,7 +1721,7 @@ async def _read_msg_chunk(ub, entity, add_offset: int, limit: int,
     finally:
         if local_cache:
             try:
-                async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+                async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                     await _db.executemany(
                         "INSERT OR IGNORE INTO messages_cache "
                         "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
@@ -1814,7 +1814,7 @@ async def scan_messages(userbot, target, output_path, status_msg, days=None,
                     _cache_batch.append((msg.id, _src_str, s_id, s_name, s_un, _mc_text[:2000], msg_dt))
                     if len(_cache_batch) >= 300:
                         try:
-                            async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+                            async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                                 await _db.executemany(
                                     "INSERT OR IGNORE INTO messages_cache "
                                     "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
@@ -1836,7 +1836,7 @@ async def scan_messages(userbot, target, output_path, status_msg, days=None,
                         _dbg("scan_messages", e)
             if _cache_batch:
                 try:
-                    async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+                    async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                         await _db.executemany(
                             "INSERT OR IGNORE INTO messages_cache "
                             "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
@@ -1985,7 +1985,7 @@ async def scan_messages(userbot, target, output_path, status_msg, days=None,
                 inv_links = extract_invite_links(bio)
                 if inv_links:
                     maxfiy = ", ".join(inv_links)
-                    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+                    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
                         for inv in inv_links:
                             await db.execute(
                                 "INSERT OR IGNORE INTO hidden_channel_knocker "
@@ -2150,7 +2150,7 @@ async def _comment_scan_parallel(all_bots, target, output_path, status_msg, scan
                     )
                     if len(cache_batch) >= 500:
                         try:
-                            async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+                            async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                                 await _db.executemany(
                                     "INSERT OR IGNORE INTO messages_cache "
                                     "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
@@ -2167,7 +2167,7 @@ async def _comment_scan_parallel(all_bots, target, output_path, status_msg, scan
             _dbg("_comment_scan_parallel", e)
         if cache_batch:
             try:
-                async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+                async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                     await _db.executemany(
                         "INSERT OR IGNORE INTO messages_cache "
                         "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
@@ -2340,7 +2340,7 @@ async def scan_channel_comments(userbot, target, output_path, status_msg,
             # Har 300 xabarda batch-insert
             if len(_cache_batch) >= 300:
                 try:
-                    async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+                    async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                         await _db.executemany(
                             "INSERT OR IGNORE INTO messages_cache "
                             "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
@@ -2365,7 +2365,7 @@ async def scan_channel_comments(userbot, target, output_path, status_msg,
         # Qolgan xabarlarni keshga yozish
         if _cache_batch:
             try:
-                async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+                async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                     await _db.executemany(
                         "INSERT OR IGNORE INTO messages_cache "
                         "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
@@ -2430,7 +2430,7 @@ async def scan_channel_comments(userbot, target, output_path, status_msg,
                     inv_links = extract_invite_links(bio)
                     if inv_links:
                         maxfiy = ", ".join(inv_links)
-                        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as _db2:
+                        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as _db2:
                             for inv in inv_links:
                                 await _db2.execute(
                                     "INSERT OR IGNORE INTO hidden_channel_knocker "
@@ -2600,7 +2600,7 @@ async def search_keywords(userbot, target, keywords_str, status_msg, days=None):
                 _cache_batch.append((msg.id, _src_str, s_id, s_name, s_un, _mc_text[:2000], msg_dt_str))
                 if len(_cache_batch) >= 300:
                     try:
-                        async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+                        async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                             await _db.executemany(
                                 "INSERT OR IGNORE INTO messages_cache "
                                 "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
@@ -2703,7 +2703,7 @@ async def search_keywords(userbot, target, keywords_str, status_msg, days=None):
 
         if _cache_batch:
             try:
-                async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+                async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                     await _db.executemany(
                         "INSERT OR IGNORE INTO messages_cache "
                         "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
@@ -2768,7 +2768,7 @@ async def _scan_discussion_users_bg(userbot, discussion_id: int, source_link: st
                 )
                 if len(_cache_batch) >= 200:
                     try:
-                        async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+                        async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                             await _db.executemany(
                                 "INSERT OR IGNORE INTO messages_cache "
                                 "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
@@ -2786,7 +2786,7 @@ async def _scan_discussion_users_bg(userbot, discussion_id: int, source_link: st
         # Qolgan xabarlarni keshga yozish
         if _cache_batch:
             try:
-                async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+                async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                     await _db.executemany(
                         "INSERT OR IGNORE INTO messages_cache "
                         "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
@@ -2803,7 +2803,7 @@ async def _scan_discussion_users_bg(userbot, discussion_id: int, source_link: st
         # DB da allaqachon bor foydalanuvchilarni filtrlash
         existing_ids = set()
         try:
-            async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+            async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                 async with _db.execute(
                     "SELECT DISTINCT user_id FROM users_memory_bank WHERE group_link=?",
                     (source_link,)
@@ -2834,7 +2834,7 @@ async def _scan_discussion_users_bg(userbot, discussion_id: int, source_link: st
                     if inv_links:
                         maxfiy = ", ".join(inv_links)
                         try:
-                            async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as _db:
+                            async with db_mod.connect(db_mod.DB_NAME, timeout=30) as _db:
                                 for inv in inv_links:
                                     await _db.execute(
                                         "INSERT OR IGNORE INTO hidden_channel_knocker "
@@ -2902,7 +2902,7 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
     channel_id = ""
 
     try:
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
             async with _db.execute(
                 "SELECT numeric_id, channel_name FROM resolved_channel_ids WHERE channel_link=?",
                 (src_str,)
@@ -2927,7 +2927,7 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
         if is_invite:
             try:
                 now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-                async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+                async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
                     await db.execute(
                         "INSERT OR IGNORE INTO hidden_channel_knocker "
                         "(channel_id, creator_id, source_group, last_request_time, userbot_idx) "
@@ -2961,7 +2961,7 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
                 if channel_id:
                     now_s = datetime.now().strftime("%Y-%m-%d %H:%M")
                     try:
-                        async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+                        async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                             await _db.execute(
                                 "INSERT OR REPLACE INTO resolved_channel_ids "
                                 "(channel_link, numeric_id, resolved_at, channel_name) VALUES (?,?,?,?)",
@@ -2979,7 +2979,7 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
         return
 
     last_msg_id = 0
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         try:
             async with db.execute(
                 "SELECT last_msg_id FROM music_channel_progress WHERE channel_id=?",
@@ -3016,7 +3016,7 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
         if _pkey in _PROCESSING_AUDIO:
             return
         try:
-            async with aiosqlite.connect(music_mod.MUSIC_DB, timeout=5) as _mdb:
+            async with db_mod.connect(music_mod.MUSIC_DB, timeout=5) as _mdb:
                 async with _mdb.execute(
                     "SELECT 1 FROM music_fingerprints WHERE channel_id=? AND file_name=?",
                     (channel_id, f"msg_{m.id}")
@@ -3101,7 +3101,7 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
                         try:
                             await db_mod.assign_channel(disc_link, n)
                             # Lekin biriktirilgan indeksni userbot_idx ga o'zgartir
-                            async with aiosqlite.connect(db_mod.DB_NAME, timeout=5) as _ddb:
+                            async with db_mod.connect(db_mod.DB_NAME, timeout=5) as _ddb:
                                 await _ddb.execute(
                                     "UPDATE channel_assignments SET userbot_idx=? WHERE channel_link=?",
                                     (userbot_idx, disc_link)
@@ -3146,7 +3146,7 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
             # A'zolarni partiya bilan yozish (INSERT OR IGNORE — mavjudni o'chirmaydi)
             if len(_grp_members) >= 300:
                 try:
-                    async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+                    async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                         await _db.executemany(
                             "INSERT OR IGNORE INTO users_memory_bank "
                             "(user_id, group_link, first_name, last_name, username, added_date, last_updated) "
@@ -3160,7 +3160,7 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
 
             if len(_cache_batch) >= 300:
                 try:
-                    async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+                    async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                         await _db.executemany(
                             "INSERT OR IGNORE INTO messages_cache "
                             "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
@@ -3176,7 +3176,7 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
             # (svet o'chsa ham davom etish uchun)
             if _msg_counter % 500 == 0:
                 try:
-                    async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+                    async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                         await _db.execute(
                             "INSERT OR REPLACE INTO music_channel_progress "
                             "(channel_id, last_msg_id) VALUES (?,?)",
@@ -3192,7 +3192,7 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
         if any(x in _acc_str for x in ('private', 'forbidden', 'banned', 'not found')):
           try:
             _now = datetime.now().strftime("%Y-%m-%d %H:%M")
-            async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _kdb:
+            async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _kdb:
               await _kdb.execute(
                 "INSERT OR IGNORE INTO hidden_channel_knocker "
                 "(channel_id, creator_id, source_group, last_request_time) "
@@ -3205,7 +3205,7 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
         return
     if _cache_batch:
         try:
-            async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+            async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                 await _db.executemany(
                     "INSERT OR IGNORE INTO messages_cache "
                     "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
@@ -3219,7 +3219,7 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
     # Qolgan guruh a'zolarini yozish — profil tracker keyin boyitadi
     if _grp_members:
         try:
-            async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+            async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                 await _db.executemany(
                     "INSERT OR IGNORE INTO users_memory_bank "
                     "(user_id, group_link, first_name, last_name, username, added_date, last_updated) "
@@ -3241,7 +3241,7 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
 
     if new_last_id > last_msg_id:
         try:
-            async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+            async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
                 await db.execute(
                     "CREATE TABLE IF NOT EXISTS music_channel_progress "
                     "(channel_id TEXT PRIMARY KEY, last_msg_id INTEGER)"
@@ -3267,7 +3267,7 @@ async def _music_process_list(userbot, sources, userbot_idx=0):
     # Bot o'chib-yongan bo'lsa — qayerda to'xtaganini o'qi
     start_from = 0
     try:
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
             async with _db.execute(
                 "SELECT value FROM music_scan_state WHERE key=?", (cursor_key,)
             ) as _cur:
@@ -3294,7 +3294,7 @@ async def _music_process_list(userbot, sources, userbot_idx=0):
 
         # Cursor OLDIN saqlash — bot o'chsa ham keyingi kanaldan davom etadi
         try:
-            async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+            async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                 await _db.execute(
                     "INSERT OR REPLACE INTO music_scan_state (key, value) VALUES (?,?)",
                     (cursor_key, str(i + 1))
@@ -3328,7 +3328,7 @@ async def _music_process_list(userbot, sources, userbot_idx=0):
 
     # Tsikl tugadi — cursori tozalash (keyingi tsikl yangidan boshlansin)
     try:
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
             await _db.execute("DELETE FROM music_scan_state WHERE key=?", (cursor_key,))
             await _db.commit()
     except Exception as e:
@@ -3480,7 +3480,7 @@ async def _process_realtime_audio(userbot, msg, channel_id: str, channel_name: s
     try:
         # Bazada allaqachon saqlangan bo'lsa — yuklamasdan o'tkazib yuborish
         try:
-            async with aiosqlite.connect(music_mod.MUSIC_DB, timeout=5) as _mdb:
+            async with db_mod.connect(music_mod.MUSIC_DB, timeout=5) as _mdb:
                 async with _mdb.execute(
                     "SELECT 1 FROM music_fingerprints WHERE channel_id=? AND file_name=?",
                     (channel_id, f"msg_{msg.id}")
@@ -3536,7 +3536,7 @@ async def _cache_realtime_message(msg, src_str: str):
             s_name = sender.title or ""
             s_un = getattr(sender, 'username', '') or ""
         msg_dt = msg.date.strftime("%Y-%m-%d %H:%M") if msg.date else ""
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=10) as db:
             await db.execute(
                 "INSERT OR IGNORE INTO messages_cache "
                 "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
@@ -3562,7 +3562,7 @@ def setup_realtime_handlers(userbot, userbot2=None, bot=None, admin_id=None):
         try:
             num_str  = str(channel_id)
             num_full = f"-100{channel_id}"
-            async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
+            async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
                 async with _db.execute(
                     "SELECT channel_id, creator_id, source_group "
                     "FROM hidden_channel_knocker "
@@ -3650,7 +3650,7 @@ async def _notify_channel_joined(ub, bot, admin_id, idx, entity, ch_id_str, ch_i
         _eid = str(entity.id).lstrip('-')
         numeric_id_str = f"-100{_eid}" if not str(entity.id).startswith('-100') else str(entity.id)
 
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         cur = await db.execute(
             "UPDATE hidden_channel_knocker SET status='joined', numeric_id=?, channel_id=? "
             "WHERE (channel_id=? OR channel_id=?) AND status='pending'",
@@ -3688,7 +3688,7 @@ async def _notify_channel_joined(ub, bot, admin_id, idx, entity, ch_id_str, ch_i
             for _link in (ch_id_str, numeric_id_str):
                 if not _link:
                     continue
-                async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _adb:
+                async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _adb:
                     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
                     await _adb.execute(
                         "INSERT OR REPLACE INTO channel_assignments "
@@ -3733,7 +3733,7 @@ async def _match_new_channel_to_pending(ub, bot, admin_id, idx, channel_id):
         if entity is None:
             return
 
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
             async with db.execute(
                 "SELECT rowid, channel_id, creator_id, source_group "
                 "FROM hidden_channel_knocker WHERE status='pending' AND userbot_idx=?",
@@ -3813,7 +3813,7 @@ async def _distribute_channels(n: int):
     boshqa userbotga ko'chirilmaydi — faqat NULL bo'lganlar tayinlanadi.
     """
     try:
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
             # 0. So'rovnoma YUBORILMAGAN kanallarni NULL ga qaytaramiz —
             #    shunda ular barcha N userbotga teng qayta taqsimlanadi.
             #    (last_request_time bo'sh = hech kim ulanmagan -> ko'chirish xavfsiz)
@@ -3900,7 +3900,7 @@ async def smart_channel_knocker(userbot, bot, admin_id, extra_userbots=None):
 
             for idx, ub in enumerate(all_bots):
                 # Bu userbot uchun navbatdagi 1 ta kanal (faqat o'zinikidan)
-                async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+                async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
                     async with db.execute(
                         "SELECT channel_id, creator_id, source_group, last_request_time "
                         "FROM hidden_channel_knocker WHERE status='pending' AND userbot_idx=? "
@@ -3971,7 +3971,7 @@ async def smart_channel_knocker(userbot, bot, admin_id, extra_userbots=None):
                 sent = await send_join_request(ub, ch_id_str)
                 print(f"[KNOCKER] UB{idx+1} natija: sent={sent}")
                 if sent:
-                    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+                    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
                         await db.execute(
                             "UPDATE hidden_channel_knocker SET last_request_time=?, userbot_idx=?, channel_id=? WHERE channel_id=?",
                             (now_str, idx, ch_id_str, ch_id_raw)
@@ -3999,7 +3999,7 @@ async def sync_source_messages(userbot, source: str, limit_days: int = 90):
         return 0
 
     # Oxirgi saqlangan xabar ID sini olish
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         async with db.execute(
             "SELECT last_msg_id FROM source_sync_state WHERE source=?", (source,)
         ) as cur:
@@ -4060,7 +4060,7 @@ async def sync_source_messages(userbot, source: str, limit_days: int = 90):
 
             msg_date = msg.date.strftime("%Y-%m-%d %H:%M") if msg.date else ""
 
-            async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+            async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
                 try:
                     await db.execute(
                         "INSERT OR IGNORE INTO messages_cache "
@@ -4094,7 +4094,7 @@ async def sync_source_messages(userbot, source: str, limit_days: int = 90):
     # Sinxron holatini yangilash
     if new_last_id > last_id:
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
             await db.execute(
                 "INSERT OR REPLACE INTO source_sync_state (source, last_msg_id, last_synced) "
                 "VALUES (?, ?, ?)",
@@ -4131,7 +4131,7 @@ async def search_keywords_local(keyword_str: str, days: int = None):
     seen_ids: set = set()
     combined_rows: list = []
 
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         # 1. FTS5 — tez indeks qidiradi
         try:
             fts_terms = " OR ".join(f'"{kw}"' for kw in keywords)
@@ -4197,7 +4197,7 @@ async def search_keywords_local(keyword_str: str, days: int = None):
 async def get_cache_stats():
     """Kesh statistikasi."""
     import database as db_mod
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=15) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=15) as db:
         async with db.execute("SELECT COUNT(*) FROM messages_cache") as cur:
             total = (await cur.fetchone())[0]
         async with db.execute("SELECT COUNT(DISTINCT source) FROM messages_cache") as cur:
@@ -4242,7 +4242,7 @@ async def lookup_channel_by_id(userbot, channel_id: int):
 
     # 1. Lokal DB dan qidirish
     abs_id = str(abs(channel_id))
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=15) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=15) as db:
         async with db.execute(
             "SELECT channel_id, numeric_id FROM hidden_channel_knocker "
             "WHERE numeric_id=? OR channel_id=?",
@@ -4255,7 +4255,7 @@ async def lookup_channel_by_id(userbot, channel_id: int):
         return {'title': ch_link, 'username': None, 'members': None}, ch_link
 
     # 2. resolved_channel_ids dan
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=15) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=15) as db:
         async with db.execute(
             "SELECT channel_link FROM resolved_channel_ids WHERE numeric_id=?",
             (abs_id,)
@@ -4290,7 +4290,7 @@ async def lookup_user_by_id(user_id: int):
     import database as db_mod
 
     # 1. Profil va guruhlar
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         async with db.execute(
             """
             SELECT MAX(first_name), MAX(last_name), MAX(username), MAX(phone),
@@ -4303,7 +4303,7 @@ async def lookup_user_by_id(user_id: int):
             pr = await cur.fetchone()
 
     # 2. Xabarlar
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         async with db.execute(
             "SELECT msg_id, source, sender_name, sender_username, text, msg_date "
             "FROM messages_cache WHERE sender_id=? ORDER BY msg_date DESC",
@@ -4408,7 +4408,7 @@ def calculate_trust_score(profile: dict, msg_count: int = 0) -> tuple:
 async def search_by_username(username: str) -> list:
     import database as db_mod
     uname = username.lstrip('@').lower().strip()
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         async with db.execute(
             """
             SELECT DISTINCT user_id, MAX(first_name), MAX(last_name), username,
@@ -4442,7 +4442,7 @@ async def search_by_phone(userbot, phone: str) -> dict:
 
     # Avval bazadan qidirish
     clean = phone.strip().replace(' ', '').replace('-', '')
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         async with db.execute(
             """
             SELECT DISTINCT user_id, MAX(first_name), MAX(last_name), MAX(username),
@@ -4506,7 +4506,7 @@ async def get_user_timeline(user_id: int, days: int = 30) -> dict:
     import database as db_mod
     from datetime import timedelta
     since = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         async with db.execute(
             """
             SELECT DATE(msg_date) as day, COUNT(*) as cnt, GROUP_CONCAT(DISTINCT source)
@@ -4538,7 +4538,7 @@ async def get_user_timeline(user_id: int, days: int = 30) -> dict:
 
 async def get_common_members(group1: str, group2: str) -> list:
     import database as db_mod
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         async with db.execute(
             """
             SELECT a.user_id, a.first_name, a.last_name, a.username, a.phone
@@ -4563,7 +4563,7 @@ async def detect_coordinated_behavior(group_link: str, hours: int = 48) -> dict:
     from datetime import timedelta
 
     # 1. Bir vaqtda qo'shilgan akkauntlar (added_date bo'yicha)
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         async with db.execute(
             """
             SELECT user_id, first_name, username, phone, bio, added_date
@@ -4603,7 +4603,7 @@ async def detect_coordinated_behavior(group_link: str, hours: int = 48) -> dict:
             i = j if j > i else i + 1
 
     # 2. Bio o'xshashligi — bo'sh bio li akkauntlar
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         async with db.execute(
             """
             SELECT COUNT(*) FROM users_memory_bank
@@ -4650,7 +4650,7 @@ async def detect_coordinated_behavior(group_link: str, hours: int = 48) -> dict:
 async def analyze_writing_style(user_id: int) -> dict:
     import database as db_mod
     import re as _re
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         async with db.execute(
             "SELECT text FROM messages_cache WHERE sender_id=? AND is_deleted=0 "
             "AND text IS NOT NULL LIMIT 500",
@@ -4719,7 +4719,7 @@ async def compare_writing_styles(user_id1: int, user_id2: int) -> int:
 
 async def get_temporal_correlations(min_overlap: int = 5, limit: int = 20) -> list:
     import database as db_mod
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         # Har bir foydalanuvchi qaysi soatlarda faol
         async with db.execute(
             """
@@ -4755,7 +4755,7 @@ async def get_temporal_correlations(min_overlap: int = 5, limit: int = 20) -> li
 
 async def get_deleted_messages(source: str, limit: int = 50) -> list:
     import database as db_mod
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         async with db.execute(
             """
             SELECT msg_id, sender_id, sender_name, sender_username, text, msg_date
@@ -4772,7 +4772,7 @@ async def get_deleted_messages(source: str, limit: int = 50) -> list:
 
 async def mark_deleted_messages(source: str, current_msg_ids: set):
     import database as db_mod
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         async with db.execute(
             "SELECT msg_id FROM messages_cache WHERE source=? AND is_deleted=0",
             (source,)
@@ -4780,7 +4780,7 @@ async def mark_deleted_messages(source: str, current_msg_ids: set):
             cached_ids = {r[0] for r in await cur.fetchall()}
     deleted_ids = cached_ids - current_msg_ids
     if deleted_ids:
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
             await db.executemany(
                 "UPDATE messages_cache SET is_deleted=1 WHERE msg_id=? AND source=?",
                 [(mid, source) for mid in deleted_ids]
@@ -4795,7 +4795,7 @@ async def mark_deleted_messages(source: str, current_msg_ids: set):
 
 async def get_account_lifecycle(user_id: int) -> dict:
     import database as db_mod
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         # Oylik faollik
         async with db.execute(
             """
@@ -5146,7 +5146,7 @@ async def resolve_identifier_to_uid(userbot, identifier: str):
     # @username
     if ident.startswith('@'):
         uname = ident[1:].lower()
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
             async with db.execute(
                 "SELECT DISTINCT user_id FROM users_memory_bank WHERE LOWER(username)=? LIMIT 1",
                 (uname,)
@@ -5240,7 +5240,7 @@ async def generate_tergov_pdf(userbot, identifier: str) -> str:
     # Musiqa xabarlari
     music_msgs = []
     try:
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
             async with db.execute(
                 """
                 SELECT msg_id, source, text, msg_date
@@ -5733,7 +5733,7 @@ async def migrate_pc_links(userbot, bot=None, admin_id=None) -> tuple:
     Qaytaradi: (updated_rows, total_rows, unique_resolved)
     """
     # 1. Barcha t.me/c/ bo'lgan qatorlarni olish
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         async with db.execute(
             "SELECT user_id, group_link, has_hidden, open_channels "
             "FROM users_memory_bank "
@@ -5775,7 +5775,7 @@ async def migrate_pc_links(userbot, bot=None, admin_id=None) -> tuple:
                 changed = True
 
         if changed:
-            async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+            async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
                 await db.execute(
                     "UPDATE users_memory_bank "
                     "SET has_hidden=?, open_channels=? "
@@ -5799,7 +5799,7 @@ async def migrate_pc_links(userbot, bot=None, admin_id=None) -> tuple:
     # music_channel_progress da ham eski linklarni yangilash
     progress_updated = 0
     try:
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
             async with db.execute(
                 "SELECT source FROM music_channel_progress "
                 "WHERE source LIKE '%t.me/c/%'"
@@ -5811,7 +5811,7 @@ async def migrate_pc_links(userbot, bot=None, admin_id=None) -> tuple:
                 ch_id    = int(m.group(1))
                 new_src  = _PC_RESOLVE_CACHE.get(ch_id)
                 if new_src and new_src != old_src:
-                    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+                    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
                         # Yangi source allaqachon bor bo'lsa — eskisini o'chirish
                         async with db.execute(
                             "SELECT 1 FROM music_channel_progress WHERE source=?",
