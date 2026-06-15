@@ -245,7 +245,7 @@ async def btn_scan(event):
 async def btn_keyword_search(event):
     if not await is_admin(event.sender_id):
         return
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         async with db.execute(
             "SELECT COUNT(DISTINCT group_link) FROM users_memory_bank "
             "WHERE group_link IS NOT NULL AND group_link != ''"
@@ -271,7 +271,7 @@ async def btn_status(event):
     # Asosiy statistika
     from datetime import datetime as _dt
     today_str = _dt.now().strftime("%Y-%m-%d")
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=10) as db:
         total   = (await (await db.execute("SELECT COUNT(DISTINCT user_id) FROM users_memory_bank")).fetchone())[0]
         pending = (await (await db.execute("SELECT COUNT(*) FROM hidden_channel_knocker WHERE status='pending'")).fetchone())[0]
         joined  = (await (await db.execute("SELECT COUNT(*) FROM hidden_channel_knocker WHERE status='joined'")).fetchone())[0]
@@ -315,7 +315,7 @@ async def btn_status(event):
 
     # music_channel_progress asosiy DBda saqlanadi (music DBda emas)
     try:
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _mdb2:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _mdb2:
             await _mdb2.execute(
                 "CREATE TABLE IF NOT EXISTS music_channel_progress "
                 "(channel_id TEXT PRIMARY KEY, last_msg_id INTEGER)"
@@ -395,7 +395,7 @@ async def btn_fayl(event):
         tc_start_row  = 1
         all_start_row = 1
 
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=15) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=15) as db:
         async with db.execute(
             "SELECT user_id, first_name, username, phone, open_channels, "
             "has_hidden, bio, group_link, MAX(last_updated) as last_updated "
@@ -438,7 +438,7 @@ async def btn_fayl(event):
     # 1. hidden_channel_knocker — maxfiy kanallar (joined bo'lganda numeric_id saqlanadi)
     if uid_list:
         placeholders = ",".join("?" * len(uid_list))
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
             async with db.execute(
                 f"SELECT creator_id, channel_id, numeric_id FROM hidden_channel_knocker "
                 f"WHERE creator_id IN ({placeholders})",
@@ -477,7 +477,7 @@ async def btn_fayl(event):
     if all_links:
         _links_list = list(all_links)
         _ph = ",".join("?" * len(_links_list))
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
             async with db.execute(
                 f"SELECT channel_link, numeric_id FROM resolved_channel_ids "
                 f"WHERE channel_link IN ({_ph})",
@@ -539,7 +539,7 @@ async def btn_fayl(event):
     # ── ЛИСТ1: faqat yangi skanerlangan foydalanuvchilar ─────────────
     await status_msg.edit("⏳ Лист1 ma'lumotlari yuklanmoqda...")
 
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=60) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=60) as db:
         async with db.execute(
             """
             SELECT
@@ -675,7 +675,7 @@ async def btn_admins(event):
 async def btn_sources(event):
     if not await is_admin(event.sender_id):
         return
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         async with db.execute(
             "SELECT group_link, COUNT(DISTINCT user_id) as cnt "
             "FROM users_memory_bank "
@@ -848,7 +848,7 @@ async def global_input_processor(event):
             return
         USER_STATES[event.sender_id] = None
         sana = event.text.strip()
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
             async with db.execute(
                 "SELECT file_name, file_path FROM archive_bin WHERE created_date=?", (sana,)
             ) as cur:
@@ -891,7 +891,7 @@ async def global_input_processor(event):
             return
         USER_STATES[event.sender_id] = None
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
             await db.execute(
                 "INSERT OR IGNORE INTO hidden_channel_knocker "
                 "(channel_id, creator_id, source_group, last_request_time) "
@@ -989,7 +989,7 @@ async def run_keyword_search(sender_id, keyword, status_msg, days=None):
                 engine._dbg("main.run_keyword_search", e)
 
             sources_set = set()
-            async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+            async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
                 async with db.execute(
                     "SELECT DISTINCT group_link FROM users_memory_bank "
                     "WHERE group_link IS NOT NULL AND group_link != ''", ()
@@ -1094,7 +1094,7 @@ async def run_comment_scan(sender_id, target, fpath, status_msg, _ub=None):
             await engine.auto_assign_channel(str(target))
         result = await engine.scan_channel_comments(_ub, target, fpath, status_msg)
         count, ch_title = result
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
             await db.execute(
                 "INSERT INTO archive_bin (file_name, file_path, created_date) VALUES (?, ?, ?)",
                 (os.path.basename(fpath), fpath, datetime.now().strftime("%Y-%m-%d"))
@@ -1126,7 +1126,7 @@ async def run_msg_scan(sender_id, target, fpath, status_msg):
     try:
         _ub = await engine.get_ub_for_channel(str(target)) or userbot
         count = await engine.scan_messages(_ub, target, fpath, status_msg)
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
             await db.execute(
                 "INSERT INTO archive_bin (file_name, file_path, created_date) VALUES (?, ?, ?)",
                 (os.path.basename(fpath), fpath, datetime.now().strftime("%Y-%m-%d"))
@@ -1221,7 +1221,7 @@ async def run_background_scan(sender_id, target, fpath, status_msg, pre_entity=N
             _ub, target, fpath, status_msg, pre_entity=pre_entity,
             extra_userbots=_EXTRA_USERBOTS
         )
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
             await db.execute(
                 "INSERT INTO archive_bin (file_name, file_path, created_date) VALUES (?, ?, ?)",
                 (os.path.basename(fpath), fpath, datetime.now().strftime("%Y-%m-%d"))
@@ -1404,7 +1404,7 @@ async def run_multi_music_search(sender_id, files, status_msg):
 
                 fname = uname = phone = bio = has_hidden = open_ch = grp_link = ""
                 kanal_id = ""
-                async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+                async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
                     async with db.execute(
                         "SELECT first_name, username, phone, bio, "
                         "has_hidden, open_channels, group_link "
@@ -1804,7 +1804,7 @@ async def watch_alert_sender():
                     engine._dbg("main.watch_alert_sender", e)
                 if not ch_link:
                     try:
-                        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as _db:
+                        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as _db:
                             async with _db.execute(
                                 "SELECT channel_id FROM hidden_channel_knocker "
                                 "WHERE channel_id LIKE ? LIMIT 1",
@@ -1834,7 +1834,7 @@ async def watch_alert_sender():
             all_admins = set()
             all_admins.add(SUPER_ADMIN_ID)
             all_admins.update(EXTRA_ADMIN_IDS)
-            async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as _db:
+            async with db_mod.connect(db_mod.DB_NAME, timeout=30) as _db:
                 async with _db.execute("SELECT admin_id FROM trusted_admins") as _cur:
                     for (aid,) in await _cur.fetchall():
                         all_admins.add(aid)
@@ -1895,7 +1895,7 @@ async def check_media(event):
     # .env dagi birinchi manbadan oxirgi 20 ta xabarni tekshirish
     status = await event.respond("🔍 Tekshirilmoqda...")
     try:
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
             # Avval joined kanallardan qidirish
             async with db.execute(
                 "SELECT channel_id FROM hidden_channel_knocker "
@@ -1952,7 +1952,7 @@ async def rescan_channel_cmd(event):
         channel_name = getattr(entity, 'title', target)
 
         # Progressni o'chirish — to'liq qayta skanerlash uchun
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
             try:
                 await db.execute(
                     "CREATE TABLE IF NOT EXISTS music_channel_progress "
@@ -2107,7 +2107,7 @@ async def _rescan_all_profiles_music(sender_id, status_msg):
     count = 0
     found = 0
     try:
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
             async with db.execute("SELECT DISTINCT user_id FROM users_memory_bank") as cur:
                 users = await cur.fetchall()
         total = len(users)
@@ -2194,7 +2194,7 @@ async def test_channel_cmd(event):
 async def check_knocker(event):
     if not await is_admin(event.sender_id):
         return
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         async with db.execute(
             "SELECT COUNT(*) FROM hidden_channel_knocker WHERE status='pending'"
         ) as cur:
@@ -2224,7 +2224,7 @@ async def check_knocker(event):
     ]
     from datetime import datetime as _dt2
     today_str2 = _dt2.now().strftime("%Y-%m-%d")
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db2:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db2:
         today_sends = {}
         for idx, _ in per_bot:
             ts = (await (await _db2.execute(
@@ -2265,7 +2265,7 @@ async def reassign_knocker_cmd(event):
     if n == 0:
         await event.respond("❌ Userbotlar yuklanmagan.")
         return
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         rows = await (await db.execute(
             "SELECT rowid FROM hidden_channel_knocker WHERE status='pending'"
         )).fetchall()
@@ -2289,7 +2289,7 @@ async def reassign_knocker_cmd(event):
 async def test_knock(event):
     if not await is_admin(event.sender_id):
         return
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         async with db.execute(
             "SELECT channel_id FROM hidden_channel_knocker WHERE status='pending' LIMIT 1"
         ) as cur:
@@ -2384,7 +2384,11 @@ async def _run_phishing_check(sender_id, message):
                     f"📎 `{fname}`\n"
                     f"_(Yuklab olinmoqda...)_"
                 )
-                tmp_path = os.path.join(BASE_DIR, f"_phish_tmp_{sender_id}_{fname}")
+                # Fayl nomi foydalanuvchidan keladi — Windows uchun xavfli
+                # belgilarni (: * ? " < > | \ /) tozalaymiz, aks holda
+                # download_media OSError beradi yoki path traversal bo'ladi.
+                _safe_fname = re.sub(r'[^\w.\-]', '_', os.path.basename(fname)) or "file"
+                tmp_path = os.path.join(BASE_DIR, f"_phish_tmp_{sender_id}_{_safe_fname}")
                 try:
                     await bot.download_media(message, file=tmp_path)
                     if is_apk:
@@ -2578,7 +2582,13 @@ async def bot_restart_cb(event):
         await bot.disconnect()
     except Exception as e:
         engine._dbg("main.bot_restart_cb", e)
-    os.execv(sys.executable, [sys.executable] + sys.argv)
+    # os.execv Windowsda bo'sh joyli yo'l ('Новая папка') bilan ishonchsiz
+    # va .session fayllari hali band bo'lishi mumkin. Yangi jarayon ochib,
+    # eskisini to'liq yopamiz.
+    import subprocess
+    await asyncio.sleep(1)  # session DB qulflari bo'shashi uchun
+    subprocess.Popen([sys.executable, *sys.argv])
+    os._exit(0)
 
 
 @bot.on(events.CallbackQuery(pattern=b"ctrl_pause_all"))
@@ -2769,7 +2779,7 @@ async def watch_archive_callback(event):
     # Barcha foydalanuvchi ma'lumotlarini bitta ulanishda oldindan yuklab olish
     all_src_ids = list({src_id for (_, _, src_id, _, _, _) in logs})
     user_data_map = {}
-    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+    async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
         for _sid in all_src_ids:
             async with db.execute(
                 "SELECT first_name, username, phone, group_link "
@@ -2882,7 +2892,7 @@ async def watch_rescan_callback(event):
         return
 
     total_found = 0
-    async with aiosqlite.connect(music.MUSIC_DB, timeout=30) as db:
+    async with db_mod.connect(music.MUSIC_DB, timeout=30) as db:
         await db.execute("""
             CREATE TABLE IF NOT EXISTS music_fingerprints (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2897,7 +2907,7 @@ async def watch_rescan_callback(event):
 
     # Watch fingerprintlarini pre-parse qilish — har biri 1 marta parse (15 ta)
     watch_fps_parsed = []
-    async with aiosqlite.connect(music.MUSIC_DB, timeout=30) as db:
+    async with db_mod.connect(music.MUSIC_DB, timeout=30) as db:
         async with db.execute("SELECT id, fingerprint FROM watch_fingerprints") as cur:
             for (w_id, w_fp) in await cur.fetchall():
                 watch_obj = next((w for w in watches if w[0] == w_id), None)
@@ -2966,7 +2976,7 @@ async def cmd_sync_cache(event):
     # Fon da ishga tushirish
     async def _do_sync():
         sources_set = set()
-        async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+        async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
             async with db.execute(
                 "SELECT DISTINCT group_link FROM users_memory_bank "
                 "WHERE group_link IS NOT NULL AND group_link != ''"
@@ -3953,12 +3963,15 @@ async def main():
     globals()['userbot2'] = _EXTRA_USERBOTS[0] if _EXTRA_USERBOTS else None
 
     # Elektr uzilishi qolgan vaqtinchalik fayllarni tozalash
+    # Barcha prefikslar: tmp_, multi_, watch_ (audio), excel_upload_, _phish_tmp_
     import glob as _glob
-    for _tmp in _glob.glob(os.path.join(BASE_DIR, "tmp_*.ogg")):
-        try:
-            os.remove(_tmp)
-        except Exception as e:
-            engine._dbg("main.main", e)
+    for _pat in ("tmp_*.ogg", "multi_*.ogg", "watch_*.ogg",
+                 "excel_upload_*.xlsx", "_phish_tmp_*"):
+        for _tmp in _glob.glob(os.path.join(BASE_DIR, _pat)):
+            try:
+                os.remove(_tmp)
+            except Exception as e:
+                engine._dbg("main.main", e)
 
     # Navbatlar — tasklar boshlanishidan oldin tayyor bo'lishi shart
     engine._WATCH_ALERTS        = asyncio.Queue()

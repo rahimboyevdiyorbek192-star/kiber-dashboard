@@ -1217,7 +1217,7 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
                         _cache_batch
                     )
                     await _db.commit()
-                asyncio.create_task(_check_batch_alerts(_cache_batch))
+                asyncio.create_task(_check_batch_alerts(list(_cache_batch)))
             except Exception as e:
                 _dbg("deep_scan_group", e)
 
@@ -1677,14 +1677,20 @@ _SCAN_CHUNK = 2000   # har userbot bir tsiklda o'qiydigan xabar soni
 
 async def _read_msg_chunk(ub, entity, add_offset: int, limit: int,
                           unique_users: dict, unique_ids: set,
-                          src_str: str, offset_date=None) -> int:
-    """add_offset dan boshlab limit ta xabar o'qiydi, foydalanuvchilarni yig'adi."""
+                          src_str: str, cutoff=None) -> int:
+    """add_offset dan boshlab limit ta xabar o'qiydi, foydalanuvchilarni yig'adi.
+    cutoff berilsa — undan eski xabarga yetganda to'xtaydi (oxirgi N kun)."""
+    from datetime import timezone as _tz
     count = 0
     local_cache = []
     try:
         async for msg in ub.iter_messages(entity, limit=limit,
-                                          add_offset=add_offset,
-                                          offset_date=offset_date):
+                                          add_offset=add_offset):
+            # Sana filtri — cutoff dan eski bo'lsa to'xtatish
+            if cutoff and msg.date:
+                _md = msg.date.replace(tzinfo=_tz.utc) if msg.date.tzinfo is None else msg.date
+                if _md < cutoff:
+                    break
             if msg.sender_id and msg.sender_id > 0:
                 sender = msg.sender
                 if sender and not getattr(sender, 'bot', False) and not getattr(sender, 'deleted', False) and hasattr(sender, 'first_name'):
@@ -1715,7 +1721,7 @@ async def _read_msg_chunk(ub, entity, add_offset: int, limit: int,
                                 "VALUES (?,?,?,?,?,?,?)", local_cache
                             )
                             await _db.commit()
-                        asyncio.create_task(_check_batch_alerts(local_cache))
+                        asyncio.create_task(_check_batch_alerts(list(local_cache)))
                     except Exception as e:
                         _dbg("_read_msg_chunk", e)
                     local_cache.clear()
@@ -1733,7 +1739,7 @@ async def _read_msg_chunk(ub, entity, add_offset: int, limit: int,
                         "VALUES (?,?,?,?,?,?,?)", local_cache
                     )
                     await _db.commit()
-                asyncio.create_task(_check_batch_alerts(local_cache))
+                asyncio.create_task(_check_batch_alerts(list(local_cache)))
             except Exception as e:
                 _dbg("_read_msg_chunk", e)
     return count
@@ -1781,12 +1787,13 @@ async def scan_messages(userbot, target, output_path, status_msg, days=None,
         # Xabar yozgan unikal foydalanuvchilarni yig'ish
         unique_users = {}  # user_id → user object
 
-        # Sana filtri
+        # Sana filtri — "oxirgi N kun". offset_date ISHLATILMAYDI (Telethon uni
+        # teskari talqin qiladi). Eng yangidan boshlab cutoff da to'xtatamiz.
         from datetime import timezone
-        offset_date = None
+        cutoff = None
         if days:
             from datetime import timedelta
-            offset_date = datetime.now(timezone.utc) - timedelta(days=days)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
         # Xabarlardan foydalanuvchilarni yig'ish + keshga saqlash
         unique_ids = set()
@@ -1796,7 +1803,12 @@ async def scan_messages(userbot, target, output_path, status_msg, days=None,
         if extra_userbot is None:
             # Bitta userbot — oddiy rejim
             _cache_batch = []
-            async for msg in userbot.iter_messages(entity, limit=None, offset_date=offset_date):
+            async for msg in userbot.iter_messages(entity, limit=None):
+                # Sana filtri — cutoff dan eski bo'lsa to'xtatish
+                if cutoff and msg.date:
+                    _md = msg.date.replace(tzinfo=timezone.utc) if msg.date.tzinfo is None else msg.date
+                    if _md < cutoff:
+                        break
                 if msg.sender_id and msg.sender_id > 0:
                     sender = msg.sender
                     if sender and not getattr(sender, 'bot', False) and not getattr(sender, 'deleted', False) and hasattr(sender, 'first_name'):
@@ -1826,7 +1838,7 @@ async def scan_messages(userbot, target, output_path, status_msg, days=None,
                                     "VALUES (?,?,?,?,?,?,?)", _cache_batch
                                 )
                                 await _db.commit()
-                            asyncio.create_task(_check_batch_alerts(_cache_batch))
+                            asyncio.create_task(_check_batch_alerts(list(_cache_batch)))
                         except Exception as e:
                             _dbg("scan_messages", e)
                         _cache_batch.clear()
@@ -1848,7 +1860,7 @@ async def scan_messages(userbot, target, output_path, status_msg, days=None,
                             "VALUES (?,?,?,?,?,?,?)", _cache_batch
                         )
                         await _db.commit()
-                    asyncio.create_task(_check_batch_alerts(_cache_batch))
+                    asyncio.create_task(_check_batch_alerts(list(_cache_batch)))
                 except Exception as e:
                     _dbg("scan_messages", e)
         else:
@@ -1872,9 +1884,9 @@ async def scan_messages(userbot, target, output_path, status_msg, days=None,
                 off2 = off1 + _SCAN_CHUNK
                 c1, c2 = await asyncio.gather(
                     _read_msg_chunk(userbot,       entity,  off1, _SCAN_CHUNK,
-                                    unique_users, unique_ids, _src_str, offset_date),
+                                    unique_users, unique_ids, _src_str, cutoff),
                     _read_msg_chunk(extra_userbot, entity2, off2, _SCAN_CHUNK,
-                                    unique_users, unique_ids, _src_str, offset_date),
+                                    unique_users, unique_ids, _src_str, cutoff),
                     return_exceptions=True
                 )
                 c1 = c1 if isinstance(c1, int) else 0
@@ -2032,8 +2044,10 @@ async def scan_messages(userbot, target, output_path, status_msg, days=None,
             )
 
             if count % SAVE_EVERY == 0:
-                apply_excel_styles(sheet, count)
-                wb.save(output_path)
+                # Bloklamaslik uchun ishchi oqimda (event loop band bo'lmaydi)
+                _sv = asyncio.get_running_loop()
+                await _sv.run_in_executor(None, apply_excel_styles, sheet, count)
+                await _sv.run_in_executor(None, wb.save, output_path)
 
     except Exception as e:
         await db_mod.finish_scan_session(scan_id, status='error')
@@ -2049,8 +2063,9 @@ async def scan_messages(userbot, target, output_path, status_msg, days=None,
             _RESOURCE['current_task'] = None
             _RESOURCE['task_start'] = None
 
-    apply_excel_styles(sheet, count)
-    wb.save(output_path)
+    _sv = asyncio.get_running_loop()
+    await _sv.run_in_executor(None, apply_excel_styles, sheet, count)
+    await _sv.run_in_executor(None, wb.save, output_path)
     await db_mod.finish_scan_session(scan_id, status='done')
     return count
 
@@ -2499,8 +2514,10 @@ async def scan_channel_comments(userbot, target, output_path, status_msg,
                 phone, b_date, bio, bio_links_str, has_db
             )
             if count % SAVE_EVERY == 0:
-                apply_excel_styles(sheet, count)
-                wb.save(output_path)
+                # Bloklamaslik uchun ishchi oqimda (event loop band bo'lmaydi)
+                _sv = asyncio.get_running_loop()
+                await _sv.run_in_executor(None, apply_excel_styles, sheet, count)
+                await _sv.run_in_executor(None, wb.save, output_path)
 
     except Exception as e:
         await db_mod.finish_scan_session(scan_id, status='error')
@@ -2566,27 +2583,27 @@ async def search_keywords(userbot, target, keywords_str, status_msg, days=None):
         _src_str = str(target)
         _cache_batch = []
 
-        # Sana filtri
+        # Sana filtri — "oxirgi N kun".
+        # MUHIM: offset_date ISHLATILMAYDI. Telethon offset_date dan ESKI
+        # xabarlardan boshlaydi (orqaga), shuning uchun "oxirgi N kun" buzilardi.
+        # To'g'risi: eng yangidan boshlab, cutoff dan eski bo'lganda to'xtatamiz.
         from datetime import timezone
-        offset_date = None
+        cutoff = None
         if days:
             from datetime import timedelta
-            offset_date = datetime.now(timezone.utc) - timedelta(days=days)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
-        async for msg in userbot.iter_messages(
-            entity, limit=None,
-            offset_date=offset_date
-        ):
+        async for msg in userbot.iter_messages(entity, limit=None):
             # Matn yo'q VA audio/musiqa ham yo'q — o'tkazib yuborish
             has_text  = bool(msg.text)
             has_audio = bool(msg.audio or msg.voice)
             if not has_text and not has_audio:
                 continue
 
-            # Sana filtri — offset_date dan eski bo'lsa to'xtatish
-            if offset_date and msg.date:
+            # Sana filtri — cutoff dan eski bo'lsa to'xtatish
+            if cutoff and msg.date:
                 msg_dt = msg.date.replace(tzinfo=timezone.utc) if msg.date.tzinfo is None else msg.date
-                if msg_dt < offset_date:
+                if msg_dt < cutoff:
                     break
 
             # Keshga saqlash (matnli xabarlar + caption)
@@ -2612,7 +2629,7 @@ async def search_keywords(userbot, target, keywords_str, status_msg, days=None):
                                 "VALUES (?,?,?,?,?,?,?)", _cache_batch
                             )
                             await _db.commit()
-                        asyncio.create_task(_check_batch_alerts(_cache_batch))
+                        asyncio.create_task(_check_batch_alerts(list(_cache_batch)))
                     except Exception as e:
                         _dbg("search_keywords", e)
                     _cache_batch.clear()
@@ -2715,7 +2732,7 @@ async def search_keywords(userbot, target, keywords_str, status_msg, days=None):
                         "VALUES (?,?,?,?,?,?,?)", _cache_batch
                     )
                     await _db.commit()
-                asyncio.create_task(_check_batch_alerts(_cache_batch))
+                asyncio.create_task(_check_batch_alerts(list(_cache_batch)))
             except Exception as e:
                 _dbg("search_keywords", e)
             _cache_batch.clear()

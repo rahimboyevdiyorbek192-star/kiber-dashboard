@@ -108,7 +108,7 @@ async def get_stats():
 
 async def get_fingerprint_async(audio_path):
     """Async wrapper — event loopni bloklamaydi (thread poolda ishlaydi)."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, get_fingerprint, audio_path)
 
 
