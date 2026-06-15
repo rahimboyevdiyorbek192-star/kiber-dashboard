@@ -352,17 +352,18 @@ async def btn_status(event):
     total_fp, total_ch = await music.get_stats()
 
     # Profillardan nechta musiqa skanerlandi
-    import aiosqlite as _aio
-    async with _aio.connect(music.MUSIC_DB, timeout=10) as mdb:
-        profile_scanned = (await (await mdb.execute(
+    async with db_mod.connect(music.MUSIC_DB, timeout=10) as mdb:
+        async with mdb.execute(
             "SELECT COUNT(DISTINCT channel_id) FROM music_fingerprints "
             "WHERE file_name LIKE 'profile_%'"
-        )).fetchone())[0]
+        ) as _cur:
+            profile_scanned = ((await _cur.fetchone()) or (0,))[0]
 
-        channel_scanned = (await (await mdb.execute(
+        async with mdb.execute(
             "SELECT COUNT(DISTINCT channel_id) FROM music_fingerprints "
             "WHERE file_name LIKE 'msg_%'"
-        )).fetchone())[0]
+        ) as _cur:
+            channel_scanned = ((await _cur.fetchone()) or (0,))[0]
 
         channel_progress = 0
 
