@@ -16,8 +16,13 @@ from telethon.tl.functions.messages import ImportChatInviteRequest
 from telethon.errors import FloodWaitError, ChannelPrivateError, RpcCallFailError
 from datetime import datetime
 import aiosqlite
+import tempfile
 import database as db_mod
 import music_scanner as music_mod
+
+# Vaqtinchalik fayllar uchun papka — Windows/Linux ikkalisida ishlaydi
+# (/tmp Windowsda yo'q, shuning uchun tempfile.gettempdir() ishlatamiz)
+_TMP = tempfile.gettempdir()
 
 SCANNER_PAUSED    = False
 MONITORING_PAUSED = False
@@ -4867,7 +4872,7 @@ async def get_profile_photo(userbot, user_id: int) -> str:
             user_id=user_id, offset=0, max_id=0, limit=1
         ))
         if photos.photos:
-            path = f"/tmp/tg_photo_{user_id}.jpg"
+            path = f"{_TMP}/tg_photo_{user_id}.jpg"
             await userbot.download_media(photos.photos[0], file=path)
             return path
     except Exception as e:
@@ -4958,7 +4963,7 @@ async def generate_evidence_report(user_id: int, userbot=None) -> str:
     lines.append(sep)
 
     report_text = "\n".join(lines)
-    path = f"/tmp/evidence_{user_id}_{datetime.now().strftime('%Y%m%d_%H%M')}.txt"
+    path = f"{_TMP}/evidence_{user_id}_{datetime.now().strftime('%Y%m%d_%H%M')}.txt"
     with open(path, 'w', encoding='utf-8') as f:
         f.write(report_text)
     return path
@@ -5021,7 +5026,7 @@ async def generate_investigation_report(inv_id: int) -> str:
         lines.append("")
 
     lines.append(sep)
-    path = f"/tmp/investigation_{inv_id}_{datetime.now().strftime('%Y%m%d_%H%M')}.txt"
+    path = f"{_TMP}/investigation_{inv_id}_{datetime.now().strftime('%Y%m%d_%H%M')}.txt"
     with open(path, 'w', encoding='utf-8') as f:
         f.write("\n".join(lines))
     return path
@@ -5082,7 +5087,7 @@ var options={{
 new vis.Network(container,{{nodes:nodes,edges:edges}},options);
 </script></body></html>"""
 
-    path = f"/tmp/network_map_{datetime.now().strftime('%Y%m%d_%H%M')}.html"
+    path = f"{_TMP}/network_map_{datetime.now().strftime('%Y%m%d_%H%M')}.html"
     with open(path, 'w', encoding='utf-8') as f:
         f.write(html)
     return path
@@ -5227,7 +5232,7 @@ async def generate_tergov_pdf(userbot, identifier: str) -> str:
             user_id=user_id, offset=0, max_id=0, limit=5
         ))
         for i, ph in enumerate(photos_result.photos[:5]):
-            p = f"/tmp/pdf_photo_{user_id}_{i}.jpg"
+            p = f"{_TMP}/pdf_photo_{user_id}_{i}.jpg"
             try:
                 await userbot.download_media(ph, file=p)
                 if os.path.exists(p):
@@ -5265,7 +5270,7 @@ async def generate_tergov_pdf(userbot, identifier: str) -> str:
         group_stats[src] = group_stats.get(src, 0) + 1
 
     # ── 3. PDF yaratish ──────────────────────────────────────────────
-    pdf_path = f"/tmp/tergov_{user_id}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+    pdf_path = f"{_TMP}/tergov_{user_id}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
     _now_str  = datetime.now().strftime('%Y-%m-%d %H:%M')
 
     # ── Sahifa footer (faqat pastki chiziq + qizil matn) ─────────────
