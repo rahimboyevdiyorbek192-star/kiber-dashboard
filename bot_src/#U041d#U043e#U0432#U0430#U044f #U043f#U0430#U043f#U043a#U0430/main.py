@@ -2239,19 +2239,22 @@ async def check_knocker(event):
     lines += [
         f"⏱ Interval: `{engine.KNOCK_INTERVAL // 60}` daqiqa",
         f"⚡️ MONITORING_PAUSED: `{engine.MONITORING_PAUSED}`",
-        f"\n**Navbatdagi (5 ta):**"
     ]
-    for ch_id, last_req, ub_idx in samples:
-        from datetime import datetime as dt
-        elapsed = "—"
-        if last_req:
-            try:
-                diff = (dt.now() - dt.strptime(last_req, "%Y-%m-%d %H:%M")).total_seconds()
-                elapsed = f"{int(diff//3600)}s {int((diff%3600)//60)}d o\'tgan"
-            except:
-                elapsed = last_req
-        ub_label = f"UB{ub_idx+1}" if ub_idx is not None else "?"
-        lines.append(f"  [{ub_label}] `{ch_id[:28]}` — {elapsed}")
+    if samples:
+        lines.append(f"\n**Navbatdagi ({len(samples)} ta):**")
+        for ch_id, last_req, ub_idx in samples:
+            from datetime import datetime as dt
+            elapsed = "—"
+            if last_req:
+                try:
+                    diff = (dt.now() - dt.strptime(last_req, "%Y-%m-%d %H:%M")).total_seconds()
+                    elapsed = f"{int(diff//3600)}s {int((diff%3600)//60)}d o\'tgan"
+                except:
+                    elapsed = last_req
+            ub_label = f"UB{ub_idx+1}" if ub_idx is not None else "?"
+            lines.append(f"  [{ub_label}] `{ch_id[:28]}` — {elapsed}")
+    else:
+        lines.append("\n✅ Navbatda pending kanal yo'q")
 
     await event.respond("\n".join(lines))
 
