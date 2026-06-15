@@ -1,5 +1,6 @@
 # database.py
 import os
+import re
 import aiosqlite
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -7,24 +8,163 @@ from datetime import datetime
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_NAME  = os.path.join(BASE_DIR, "cyber_station.db")
 
+# PostgreSQL ulanish manzili (ixtiyoriy).
+# Bo'sh bo'lsa — SQLite ishlatiladi (oldingiday).
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+# PostgreSQL connection pool (bir marta yaratiladi)
+_pg_pool = None
+
+
+def _to_pg_sql(sql: str) -> str:
+    """SQLite ? placeholderlarini PostgreSQL $1,$2... ga aylantiradi."""
+    idx = 0
+    def _repl(_):
+        nonlocal idx
+        idx += 1
+        return f"${idx}"
+    return re.sub(r'\?', _repl, sql)
+
+
+def _adapt_sql(sql: str) -> str:
+    """SQLite-spesifik SQL ni PostgreSQL ga moslashtiradi."""
+    sql = _to_pg_sql(sql)
+    sql = re.sub(r'\bINSERT OR IGNORE\b', 'INSERT', sql, flags=re.IGNORECASE)
+    sql = re.sub(r'\bINSERT OR REPLACE\b', 'INSERT', sql, flags=re.IGNORECASE)
+    sql = re.sub(r'ON CONFLICT\s*\(\s*\)\s*DO\s+\w+', '', sql, flags=re.IGNORECASE)
+    sql = sql.replace("datetime('now')", "NOW()")
+    sql = re.sub(r'INTEGER PRIMARY KEY AUTOINCREMENT', 'BIGSERIAL PRIMARY KEY', sql, flags=re.IGNORECASE)
+    return sql
+
+
+class _PGCursor:
+    """asyncpg ni aiosqlite cursor kabi ko'rsatadi."""
+    def __init__(self, rows, lastrowid=None):
+        self._rows = rows
+        self.lastrowid = lastrowid
+
+    async def fetchone(self):
+        if not self._rows:
+            return None
+        row = self._rows[0]
+        return tuple(row.values()) if hasattr(row, 'values') else tuple(row)
+
+    async def fetchall(self):
+        result = []
+        for row in (self._rows or []):
+            result.append(tuple(row.values()) if hasattr(row, 'values') else tuple(row))
+        return result
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_):
+        pass
+
+
+class _PGConn:
+    """asyncpg connection ni aiosqlite interface kabi ko'rsatadi."""
+    def __init__(self, conn):
+        self._conn = conn
+        self._tr = None
+
+    async def _start(self):
+        self._tr = self._conn.transaction()
+        await self._tr.start()
+
+    def execute(self, sql, params=()):
+        return _PGExecCtx(self._conn, sql, params)
+
+    async def executemany(self, sql, params_list):
+        pg_sql = _adapt_sql(sql)
+        # ON CONFLICT DO NOTHING qo'shish (INSERT OR IGNORE/REPLACE uchun)
+        if 'INSERT' in pg_sql.upper() and 'ON CONFLICT' not in pg_sql.upper():
+            pg_sql = pg_sql.rstrip().rstrip(';') + ' ON CONFLICT DO NOTHING'
+        for params in params_list:
+            try:
+                await self._conn.execute(pg_sql, *params)
+            except Exception:
+                pass
+
+    async def commit(self):
+        if self._tr:
+            await self._tr.commit()
+            self._tr = self._conn.transaction()
+            await self._tr.start()
+
+    async def rollback(self):
+        if self._tr:
+            await self._tr.rollback()
+
+
+class _PGExecCtx:
+    """execute() uchun context manager — cursor ni qaytaradi."""
+    def __init__(self, conn, sql, params):
+        self._conn = conn
+        self._sql  = _adapt_sql(sql)
+        self._params = params
+        self._cursor = None
+
+    async def __aenter__(self):
+        pg_sql = self._sql
+        # INSERT uchun ON CONFLICT DO NOTHING
+        upper = pg_sql.upper()
+        if 'INSERT' in upper and 'ON CONFLICT' not in upper:
+            pg_sql = pg_sql.rstrip().rstrip(';') + ' ON CONFLICT DO NOTHING'
+        try:
+            if 'RETURNING' in upper or upper.strip().startswith('SELECT'):
+                rows = await self._conn.fetch(pg_sql, *self._params)
+                self._cursor = _PGCursor(rows)
+            else:
+                result = await self._conn.execute(pg_sql, *self._params)
+                # lastrowid uchun RETURNING id qo'shilmagan — 0 qaytaradi
+                self._cursor = _PGCursor([], lastrowid=0)
+        except Exception as e:
+            self._cursor = _PGCursor([])
+        return self._cursor
+
+    async def __aexit__(self, *_):
+        pass
+
+
+async def _get_pg_pool():
+    global _pg_pool
+    if _pg_pool is None:
+        import asyncpg
+        _pg_pool = await asyncpg.create_pool(DATABASE_URL, min_size=5, max_size=20)
+    return _pg_pool
+
 
 @asynccontextmanager
 async def connect(db_path=None, timeout=30):
-    """Yagona ulanish helperi — HAR BIR connection uchun busy_timeout
-    o'rnatadi. Aks holda 'database is locked' xatosi darrov chiqadi
-    (busy_timeout per-connection sozlama, defaulti 0)."""
-    async with aiosqlite.connect(db_path or DB_NAME, timeout=timeout) as db:
-        await db.execute("PRAGMA busy_timeout=30000")
-        await db.execute("PRAGMA synchronous=NORMAL")
-        yield db
+    """Yagona ulanish helperi.
+    DATABASE_URL o'rnatilsa — PostgreSQL, aks holda SQLite."""
+    if DATABASE_URL:
+        pool = await _get_pg_pool()
+        async with pool.acquire() as conn:
+            pg_conn = _PGConn(conn)
+            await pg_conn._start()
+            try:
+                yield pg_conn
+                await pg_conn.commit()
+            except Exception:
+                await pg_conn.rollback()
+                raise
+    else:
+        async with aiosqlite.connect(db_path or DB_NAME, timeout=timeout) as db:
+            await db.execute("PRAGMA busy_timeout=30000")
+            await db.execute("PRAGMA synchronous=NORMAL")
+            yield db
 
 async def init_db():
     async with connect(DB_NAME, timeout=30) as db:
-        await db.execute("PRAGMA journal_mode=WAL")
-        await db.execute("PRAGMA synchronous=NORMAL")
-        await db.execute("PRAGMA cache_size=-32000")
-        await db.execute("PRAGMA temp_store=MEMORY")
-        await db.execute("PRAGMA busy_timeout=5000")
+        # SQLite uchun PRAGMA (PostgreSQL da e'tiborsiz qoladi)
+        if not DATABASE_URL:
+            await db.execute("PRAGMA journal_mode=WAL")
+            await db.execute("PRAGMA synchronous=NORMAL")
+            await db.execute("PRAGMA cache_size=-32000")
+            await db.execute("PRAGMA temp_store=MEMORY")
+            await db.execute("PRAGMA busy_timeout=5000")
         await db.execute("""
             CREATE TABLE IF NOT EXISTS users_memory_bank (
                 user_id     INTEGER,
@@ -391,14 +531,26 @@ async def save_user_to_bank(user_id, group_link, f_name, l_name, uname,
 
 async def create_scan_session(target_group, output_path, sender_id):
     async with connect(DB_NAME, timeout=30) as db:
-        cur = await db.execute(
-            "INSERT INTO scan_resume (target_group, output_path, last_offset, "
-            "total_count, sender_id, status, started_at) VALUES (?,?,0,0,?,?,?)",
-            (target_group, output_path, sender_id, 'running',
-             datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        )
-        await db.commit()
-        return cur.lastrowid
+        now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if DATABASE_URL:
+            # PostgreSQL: RETURNING id orqali lastrowid olamiz
+            import asyncpg
+            pool = await _get_pg_pool()
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "INSERT INTO scan_resume (target_group, output_path, last_offset, "
+                    "total_count, sender_id, status, started_at) VALUES ($1,$2,0,0,$3,$4,$5) RETURNING scan_id",
+                    target_group, output_path, sender_id, 'running', now_s
+                )
+                return row['scan_id'] if row else None
+        else:
+            cur = await db.execute(
+                "INSERT INTO scan_resume (target_group, output_path, last_offset, "
+                "total_count, sender_id, status, started_at) VALUES (?,?,0,0,?,?,?)",
+                (target_group, output_path, sender_id, 'running', now_s)
+            )
+            await db.commit()
+            return cur.lastrowid
 
 async def update_scan_progress(scan_id, last_offset, total_count):
     async with connect(DB_NAME, timeout=30) as db:
@@ -444,6 +596,14 @@ async def get_user_change_log(user_id: int, limit: int = 50):
 # ─────────────────────────────────────────────────────────────────────
 
 async def add_alert(admin_id: int, keyword: str, target_groups: str = '') -> int:
+    if DATABASE_URL:
+        pool = await _get_pg_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "INSERT INTO keyword_alerts (admin_id, keyword, target_groups) VALUES ($1,$2,$3) RETURNING id",
+                admin_id, keyword.lower().strip(), target_groups
+            )
+            return row['id'] if row else None
     async with connect(DB_NAME, timeout=30) as db:
         cur = await db.execute(
             "INSERT INTO keyword_alerts (admin_id, keyword, target_groups) VALUES (?,?,?)",
@@ -511,6 +671,14 @@ async def check_and_record_alert_hit(alert_id: int, msg_id: int, source: str, se
 # ─────────────────────────────────────────────────────────────────────
 
 async def create_investigation(name: str, creator_id: int) -> int:
+    if DATABASE_URL:
+        pool = await _get_pg_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "INSERT INTO investigations (name, creator_id) VALUES ($1,$2) RETURNING id",
+                name, creator_id
+            )
+            return row['id'] if row else None
     async with connect(DB_NAME, timeout=30) as db:
         cur = await db.execute(
             "INSERT INTO investigations (name, creator_id) VALUES (?,?)",
@@ -535,6 +703,15 @@ async def get_investigations(creator_id: int = None):
             return await cur.fetchall()
 
 async def add_investigation_target(inv_id: int, target_type: str, target_value: str, notes: str = '') -> int:
+    if DATABASE_URL:
+        pool = await _get_pg_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "INSERT INTO investigation_targets (inv_id, target_type, target_value, notes) "
+                "VALUES ($1,$2,$3,$4) RETURNING id",
+                inv_id, target_type, str(target_value), notes
+            )
+            return row['id'] if row else None
     async with connect(DB_NAME, timeout=30) as db:
         cur = await db.execute(
             "INSERT INTO investigation_targets (inv_id, target_type, target_value, notes) "
