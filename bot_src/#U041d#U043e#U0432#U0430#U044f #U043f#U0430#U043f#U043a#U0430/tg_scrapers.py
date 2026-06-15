@@ -3554,12 +3554,56 @@ async def _process_realtime_audio(userbot, msg, channel_id: str, channel_name: s
         _PROCESSING_AUDIO.discard(_key)
 
 
+# Real-vaqt xabarlar uchun yozuv navbati — barcha userbotlardan keladigan
+# xabarlar shu yagona navbatga tushadi, bitta yozuvchi ularni to'plab yozadi.
+# Shu tufayli ko'p ulanish bir vaqtda yozmaydi → "database is locked" bo'lmaydi.
+_RT_MSG_QUEUE = None
+_RT_WRITER_TASK = None
+
+
+async def _rt_writer_loop():
+    """Navbatdagi real-vaqt xabarlarni to'plab (batch) bazaga yozadi."""
+    global _RT_MSG_QUEUE
+    while True:
+        try:
+            row = await _RT_MSG_QUEUE.get()
+            batch = [row]
+            # Navbatda yana bo'lsa — bir martada 300 tagacha to'playmiz
+            try:
+                while len(batch) < 300:
+                    batch.append(_RT_MSG_QUEUE.get_nowait())
+            except asyncio.QueueEmpty:
+                pass
+            try:
+                async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
+                    await db.executemany(
+                        "INSERT OR IGNORE INTO messages_cache "
+                        "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
+                        "VALUES (?,?,?,?,?,?,?)",
+                        batch
+                    )
+                    await db.commit()
+            except Exception as e:
+                _dbg("_rt_writer_loop", e)
+            await asyncio.sleep(0.3)  # kichik to'planish oynasi
+        except Exception as e:
+            _dbg("_rt_writer_loop", e)
+            await asyncio.sleep(1)
+
+
 async def _cache_realtime_message(msg, src_str: str):
-    """Yangi xabarni messages_cache ga yozadi (real vaqt, 0 API)."""
+    """Yangi xabarni yozuv navbatiga qo'yadi (real vaqt, 0 API, bloklamaydi)."""
     text = msg.text or getattr(msg, 'caption', None) or ""
     if len(text) < 2:
         return
     try:
+        global _RT_MSG_QUEUE, _RT_WRITER_TASK
+        # Navbat va yozuvchini ilk chaqiruvda ishga tushiramiz (lazy)
+        if _RT_MSG_QUEUE is None:
+            _RT_MSG_QUEUE = asyncio.Queue(maxsize=10000)
+        if _RT_WRITER_TASK is None:
+            _RT_WRITER_TASK = asyncio.create_task(_rt_writer_loop())
+
         sender = msg.sender
         s_id = getattr(sender, 'id', None) or msg.sender_id or 0
         s_name, s_un = "", ""
@@ -3570,14 +3614,11 @@ async def _cache_realtime_message(msg, src_str: str):
             s_name = sender.title or ""
             s_un = getattr(sender, 'username', '') or ""
         msg_dt = msg.date.strftime("%Y-%m-%d %H:%M") if msg.date else ""
-        async with db_mod.connect(db_mod.DB_NAME, timeout=10) as db:
-            await db.execute(
-                "INSERT OR IGNORE INTO messages_cache "
-                "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
-                "VALUES (?,?,?,?,?,?,?)",
-                (msg.id, src_str, s_id, s_name, s_un, text[:2000], msg_dt)
-            )
-            await db.commit()
+        row = (msg.id, src_str, s_id, s_name, s_un, text[:2000], msg_dt)
+        try:
+            _RT_MSG_QUEUE.put_nowait(row)
+        except asyncio.QueueFull:
+            pass  # navbat to'lib ketsa, xabarni tashlaymiz (bot qotmaydi)
     except Exception as e:
         _dbg("_cache_realtime_message", e)
 
