@@ -566,6 +566,7 @@ async def search_music(audio_path, threshold=0.65):
     """
     Berilgan audio faylni bazadagi fingerprint lar bilan taqqoslaydi.
     Mos kelganlarni qaytaradi.
+    LSH indeks mavjud bo'lsa — faqat kandidatlar taqqoslanadi (tez).
     """
     await init_music_db()
 
@@ -581,6 +582,25 @@ async def search_music(audio_path, threshold=0.65):
     BATCH_SIZE = 500
     # Query fingerprint bir marta parse qilinadi — loop tashqarisida
     arr_query_parsed = parse_fingerprint(fp_query)
+
+    # LSH indeks qurilgan bo'lsa — tez yo'l
+    if _lsh_index:
+        candidates = lsh_candidates(arr_query_parsed)
+        if candidates:
+            for arr_db, (ch_id, ch_name, fname, dur) in candidates:
+                score = compare_fp_arrays(arr_query_parsed, arr_db)
+                if score >= threshold:
+                    results.append({
+                        'channel_id':   ch_id,
+                        'channel_name': ch_name,
+                        'file_name':    fname,
+                        'score':        round(score * 100, 1),
+                        'duration':     dur
+                    })
+            results.sort(key=lambda x: x['score'], reverse=True)
+            return results
+
+    # LSH indeks yo'q yoki bo'sh — to'liq skanerlash (fallback)
     async with db_mod.connect(MUSIC_DB, timeout=30) as db:
         offset = 0
         while True:
