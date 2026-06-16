@@ -1617,6 +1617,21 @@ async def background_profile_tracker(userbot, ub_idx: int = 0, n_userbots: int =
                                 f"tmp_profile_{uid}_{idx}.ogg"
                             )
                             try:
+                                # Yuklashdan OLDIN tekshiruv — doc.id bazada bormi?
+                                _already_dl = False
+                                try:
+                                    async with db_mod.connect(music_mod.MUSIC_DB, timeout=5) as _cdb:
+                                        async with _cdb.execute(
+                                            "SELECT 1 FROM music_fingerprints "
+                                            "WHERE channel_id=? AND file_name=?",
+                                            (str(uid), f"profile_{uid}_{idx}")
+                                        ) as _cc:
+                                            if await _cc.fetchone():
+                                                _already_dl = True
+                                except Exception:
+                                    pass
+                                if _already_dl:
+                                    return
                                 async with _dl_sem:
                                     await userbot.download_media(doc, file=tmp_music)
                                 if os.path.exists(tmp_music):
@@ -2280,7 +2295,8 @@ def ch_title_safe(ent):
 
 
 async def scan_channel_comments(userbot, target, output_path, status_msg,
-                                resume_offset=0, resume_count=0, scan_id=None):
+                                resume_offset=0, resume_count=0, scan_id=None,
+                                pre_entity=None):
     """
     Kanal postlarining comment qismidan (linked discussion guruh)
     yozgan foydalanuvchilarni topib skanerLaydi.
@@ -2336,9 +2352,9 @@ async def scan_channel_comments(userbot, target, output_path, status_msg,
         scan_id = await db_mod.create_scan_session(str(target), output_path, sender_id)
 
     try:
-        # 1. Kanalga ulanish (a\'zo bo\'lmasdan)
+        # 1. Kanalga ulanish — pre_entity berilgan bo'lsa qayta resolve qilinmaydi
         try:
-            channel = await userbot.get_entity(target)
+            channel = pre_entity or await userbot.get_entity(target)
         except Exception as e:
             raise Exception(f"Kanalga ulanib bo\'lmadi: {e}")
 
@@ -3896,9 +3912,9 @@ async def _match_new_channel_to_pending(ub, bot, admin_id, idx, channel_id):
 
 async def channel_join_watcher(userbot, bot, admin_id, extra_userbots=None):
     """
-    Ikkita qatlam bilan maxfiy kanallar ochilishini kuzatadi:
-    - Layer 1 (har 1 daqiqa): dialog diff — yangi kanal paydo bo'ldimi?
-    - Layer 2 (har 2 soat):   to'liq backup skan — CheckChatInviteRequest
+    Maxfiy kanallar ochilishini kuzatadi:
+    - Real-time: UpdateChannel Raw event (0 API) — asosiy yo'l
+    - Backup (har 5 daqiqa): dialog diff — event o'tkazib yuborilgan holatlar uchun
     """
     all_bots = [userbot] + [u for u in (extra_userbots or []) if u is not None]
 
@@ -3914,7 +3930,8 @@ async def channel_join_watcher(userbot, bot, admin_id, extra_userbots=None):
 
     while True:
         try:
-            await asyncio.sleep(60)
+            # 5 daqiqa — UpdateChannel event asosiy yo'l, bu faqat backup
+            await asyncio.sleep(300)
             if MONITORING_PAUSED:
                 continue
 

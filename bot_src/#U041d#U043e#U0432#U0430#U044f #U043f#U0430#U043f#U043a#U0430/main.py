@@ -1155,7 +1155,7 @@ async def run_keyword_search(sender_id, keyword, status_msg, days=None):
             engine._dbg("main.run_keyword_search", e)
 
 
-async def run_comment_scan(sender_id, target, fpath, status_msg, _ub=None):
+async def run_comment_scan(sender_id, target, fpath, status_msg, _ub=None, pre_entity=None):
     try:
         await status_msg.edit(
             f"💬 Kanal comment skanerlash boshlandi...\n"
@@ -1167,7 +1167,7 @@ async def run_comment_scan(sender_id, target, fpath, status_msg, _ub=None):
         if _ub is None:
             _ub = await engine.get_ub_for_channel(str(target)) or userbot
             await engine.auto_assign_channel(str(target))
-        result = await engine.scan_channel_comments(_ub, target, fpath, status_msg)
+        result = await engine.scan_channel_comments(_ub, target, fpath, status_msg, pre_entity=pre_entity)
         count, ch_title = result
         async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
             await db.execute(
@@ -1248,7 +1248,7 @@ async def run_auto_scan(sender_id, target, status_msg):
         if isinstance(ent, Channel) and ent.broadcast:
             fname = f"Comment_OSINT_{datetime.now().strftime('%d_%H%M')}.xlsx"
             fpath = os.path.join(BASE_DIR, fname)
-            await run_comment_scan(sender_id, target, fpath, status_msg, _ub=_ub)
+            await run_comment_scan(sender_id, target, fpath, status_msg, _ub=_ub, pre_entity=ent)
         else:
             fname = f"Group_OSINT_{datetime.now().strftime('%d_%H%M')}.xlsx"
             fpath = os.path.join(BASE_DIR, fname)
@@ -1870,13 +1870,28 @@ async def watch_alert_sender():
                 ch_id_clean = str(source_id).lstrip('-')
                 ch_id_fmt = f"-100{ch_id_clean}" if not str(source_id).startswith('-100') else source_id
                 ch_link = ""
+                # Avval resolved_channel_ids keshidan izlaymiz (API so'rovisiz)
                 try:
-                    entity = await userbot.get_entity(int(source_id))
-                    username = getattr(entity, 'username', None)
-                    if username:
-                        ch_link = f"https://t.me/{username}"
-                except Exception as e:
-                    engine._dbg("main.watch_alert_sender", e)
+                    async with db_mod.connect(db_mod.DB_NAME, timeout=5) as _rdb:
+                        async with _rdb.execute(
+                            "SELECT channel_link FROM resolved_channel_ids "
+                            "WHERE numeric_id=? LIMIT 1",
+                            (ch_id_fmt,)
+                        ) as _rc:
+                            _rrow = await _rc.fetchone()
+                    if _rrow and _rrow[0]:
+                        ch_link = _rrow[0]
+                except Exception:
+                    pass
+                # Keshda yo'q bo'lsa — API orqali
+                if not ch_link:
+                    try:
+                        entity = await userbot.get_entity(int(source_id))
+                        username = getattr(entity, 'username', None)
+                        if username:
+                            ch_link = f"https://t.me/{username}"
+                    except Exception as e:
+                        engine._dbg("main.watch_alert_sender", e)
                 if not ch_link:
                     try:
                         async with db_mod.connect(db_mod.DB_NAME, timeout=30) as _db:
