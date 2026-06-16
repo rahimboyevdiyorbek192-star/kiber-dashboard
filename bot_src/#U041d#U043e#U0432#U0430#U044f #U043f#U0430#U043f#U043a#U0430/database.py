@@ -953,13 +953,16 @@ async def reassign_channels(n_userbots: int):
                     orphans.append(ch)          # egasi yo'q (userbot o'chirilgan)
 
         # 2. Faqat egasiz kanallarni eng bo'sh UB ga bering
-        for ch in orphans:
-            min_idx = counts.index(min(counts))
-            await db.execute(
+        if orphans:
+            params = []
+            for ch in orphans:
+                min_idx = counts.index(min(counts))
+                params.append((min_idx, ch))
+                counts[min_idx] += 1
+            await db.executemany(
                 "UPDATE channel_assignments SET userbot_idx=? WHERE channel_link=?",
-                (min_idx, ch)
+                params
             )
-            counts[min_idx] += 1
         await db.commit()
         if orphans:
             print(f"[ASSIGN] {len(orphans)} ta egasiz kanal qayta tarqatildi: {counts}")

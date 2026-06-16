@@ -3948,13 +3948,16 @@ async def _distribute_channels(n: int):
                 await db.commit()
                 return
 
-            for rowid in unassigned:
-                min_idx = counts.index(min(counts))
-                await db.execute(
+            if unassigned:
+                params = []
+                for rowid in unassigned:
+                    min_idx = counts.index(min(counts))
+                    params.append((min_idx, rowid))
+                    counts[min_idx] += 1
+                await db.executemany(
                     "UPDATE hidden_channel_knocker SET userbot_idx=? WHERE rowid=?",
-                    (min_idx, rowid)
+                    params
                 )
-                counts[min_idx] += 1
 
             await db.commit()
             print(f"[KNOCKER] {len(unassigned)} ta yangi kanal taqsimlandi: {counts}")
