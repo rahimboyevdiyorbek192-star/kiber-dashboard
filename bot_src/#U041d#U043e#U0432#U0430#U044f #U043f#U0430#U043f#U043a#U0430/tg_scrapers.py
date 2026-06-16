@@ -3672,6 +3672,10 @@ def setup_realtime_handlers(userbot, userbot2=None, bot=None, admin_id=None):
         async def _msg_handler(event):
             try:
                 msg = event.message
+                # Faqat guruh/kanallarni kuzatamiz — shaxsiy (admin↔bot)
+                # chatlar va userbotning o'z xabarlari keshga tushmasin.
+                if getattr(event, 'is_private', False) or getattr(msg, 'out', False):
+                    return
                 chat = event.chat  # keshdan, 0 API
                 chat_id = str(abs(event.chat_id or 0))
                 chat_name = getattr(chat, 'title', chat_id) if chat else chat_id
