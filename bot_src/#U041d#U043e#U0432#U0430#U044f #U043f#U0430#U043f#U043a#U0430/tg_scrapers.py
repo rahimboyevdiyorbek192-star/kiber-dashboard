@@ -2475,7 +2475,8 @@ async def scan_channel_comments(userbot, target, output_path, status_msg,
                                 )
                             await _db2.commit()
                     ch_id = getattr(fi.full_user, 'personal_channel_id', None)
-                    if ch_id:
+                    # 777 va 1_000_000 dan kichik ID — Telegram tizimiy, real kanal emas.
+                    if ch_id and int(ch_id) >= 1_000_000:
                         shaxsiy = await _pc_link_cached(userbot, ch_id, chats=getattr(fi, 'chats', None))
                 except FloodWaitError as e:
                     _record_flood(e.seconds)
@@ -2882,7 +2883,8 @@ async def _scan_discussion_users_bg(userbot, discussion_id: int, source_link: st
                         except Exception as e:
                             _dbg("_process_user", e)
                     ch_id = getattr(fi.full_user, 'personal_channel_id', None)
-                    if ch_id:
+                    # 777 va 1_000_000 dan kichik ID — Telegram tizimiy, real kanal emas.
+                    if ch_id and int(ch_id) >= 1_000_000:
                         shaxsiy = await _pc_link_cached(userbot, ch_id, chats=getattr(fi, 'chats', None))
                         # Knocker ga QO'SHILMAYDI — musiqa skaneri urinib ko'radi,
                         # kira olmasa o'sha zahoti knocker ga qo'shiladi
