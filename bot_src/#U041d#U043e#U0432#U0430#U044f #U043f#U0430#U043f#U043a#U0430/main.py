@@ -403,7 +403,7 @@ async def btn_status(event):
         + queue_info +
         f"\n\n🎵 **MUSIQA SKANERLASH:**\n"
         f"👤 Profil musiqasi skanerlandi: `{profile_scanned}` ta | Qoldi: `{profiles_left}` ta\n"
-        f"📢 Kanal musiqasi skanerlandi: `{channel_scanned}` ta | Qoldi: `{max(0, channels_left)}` ta\n"
+        f"📢 Kanal musiqasi skanerlandi: `{channel_scanned}` ta | {'✅ Hammasi tayyor' if channels_left <= 0 else f'Qoldi: `{channels_left}` ta'}\n"
         f"🎶 Jami fingerprint: `{total_fp}` ta"
         + (f"\n♻️ Davom ettiriladigan: `{running}` ta" if running else "")
     )
