@@ -93,6 +93,21 @@ _FLOOD_PENALTY = 0.0   # qo'shimcha uyqu (soniyalarda), flood kelsa oshadi
 
 # Userbot flood tracker: {id(userbot): unix_timestamp_until_flood_expires}
 import time as _time_mod
+from datetime import timedelta as _timedelta
+
+# Telegram msg.date UTC bo'ladi — mahalliy vaqtga o'girish (O'zbekiston=UTC+5).
+# .env da TIMEZONE_OFFSET=5 bilan sozlanadi.
+try:
+    _TZ_OFFSET = float(os.getenv("TIMEZONE_OFFSET", "5"))
+except (TypeError, ValueError):
+    _TZ_OFFSET = 5.0
+
+def _fmt_date(dt):
+    """msg.date (UTC) ni mahalliy vaqtda 'YYYY-MM-DD HH:MM' formatida qaytaradi."""
+    if not dt:
+        return ""
+    return (dt + _timedelta(hours=_TZ_OFFSET)).strftime("%Y-%m-%d %H:%M")
+
 _UB_FLOOD_UNTIL: dict = {}
 _PROCESSING_AUDIO: set = set()   # (channel_id, msg_id) — ikki userbot bir musiqani yuklamasligi uchun
 _JOINED_CHANNEL_QUEUE: asyncio.Queue = None  # Ochilgan maxfiy kanallar navbati
@@ -874,7 +889,7 @@ async def _deep_scan_parallel(all_bots, target_group, output_path, status_msg, s
                         if sd and hasattr(sd, 'first_name'):
                             sn = ((sd.first_name or "") + " " + (sd.last_name or "")).strip()
                             su = getattr(sd, 'username', '') or ""
-                        md = msg.date.strftime("%Y-%m-%d %H:%M") if msg.date else ""
+                        md = _fmt_date(msg.date)
                         cache_batch.append(
                             (msg.id, str(target_group), msg.sender_id or 0, sn, su, _txt[:2000], md)
                         )
@@ -1171,7 +1186,7 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
                         elif sender and hasattr(sender, 'title'):
                             s_name = sender.title or ""
                             s_un   = getattr(sender, 'username', '') or ""
-                        msg_dt = msg.date.strftime("%Y-%m-%d %H:%M") if msg.date else ""
+                        msg_dt = _fmt_date(msg.date)
                         _cache_batch.append((msg.id, _src_str, s_id, s_name, s_un, _mc_text[:2000], msg_dt))
 
                     # Har 1000 xabarda batch-insert
@@ -1710,7 +1725,7 @@ async def _read_msg_chunk(ub, entity, add_offset: int, limit: int,
                 elif sender and hasattr(sender, 'title'):
                     s_name = sender.title or ""
                     s_un = getattr(sender, 'username', '') or ""
-                msg_dt = msg.date.strftime("%Y-%m-%d %H:%M") if msg.date else ""
+                msg_dt = _fmt_date(msg.date)
                 local_cache.append((msg.id, src_str, s_id, s_name, s_un, _mc_text[:2000], msg_dt))
                 if len(local_cache) >= 300:
                     try:
@@ -1827,7 +1842,7 @@ async def scan_messages(userbot, target, output_path, status_msg, days=None,
                     elif sender and hasattr(sender, 'title'):
                         s_name = sender.title or ""
                         s_un = getattr(sender, 'username', '') or ""
-                    msg_dt = msg.date.strftime("%Y-%m-%d %H:%M") if msg.date else ""
+                    msg_dt = _fmt_date(msg.date)
                     _cache_batch.append((msg.id, _src_str, s_id, s_name, s_un, _mc_text[:2000], msg_dt))
                     if len(_cache_batch) >= 300:
                         try:
@@ -2164,7 +2179,7 @@ async def _comment_scan_parallel(all_bots, target, output_path, status_msg, scan
                     if sd and hasattr(sd, 'first_name'):
                         sn = ((sd.first_name or "") + " " + (sd.last_name or "")).strip()
                         su = getattr(sd, 'username', '') or ""
-                    md = msg.date.strftime("%Y-%m-%d %H:%M") if msg.date else ""
+                    md = _fmt_date(msg.date)
                     cache_batch.append(
                         (msg.id, str(target), msg.sender_id or 0, sn, su, _txt[:2000], md)
                     )
@@ -2351,7 +2366,7 @@ async def scan_channel_comments(userbot, target, output_path, status_msg,
                 elif sender and hasattr(sender, 'title'):
                     s_name = sender.title or ""
                     s_un   = getattr(sender, 'username', '') or ""
-                msg_dt = msg.date.strftime("%Y-%m-%d %H:%M") if msg.date else ""
+                msg_dt = _fmt_date(msg.date)
                 _cache_batch.append((
                     msg.id, _src_str, msg.sender_id,
                     s_name, s_un, _mc_text[:2000], msg_dt
@@ -2618,7 +2633,7 @@ async def search_keywords(userbot, target, keywords_str, status_msg, days=None):
                 elif sender and hasattr(sender, 'title'):
                     s_name = sender.title or ""
                     s_un = getattr(sender, 'username', '') or ""
-                msg_dt_str = msg.date.strftime("%Y-%m-%d %H:%M") if msg.date else ""
+                msg_dt_str = _fmt_date(msg.date)
                 _cache_batch.append((msg.id, _src_str, s_id, s_name, s_un, _mc_text[:2000], msg_dt_str))
                 if len(_cache_batch) >= 300:
                     try:
@@ -2717,7 +2732,7 @@ async def search_keywords(userbot, target, keywords_str, status_msg, days=None):
                 'name':     name,
                 'username': username,
                 'user_id':  uid,
-                'date':     msg.date.strftime("%Y-%m-%d %H:%M") if msg.date else "",
+                'date':     _fmt_date(msg.date),
                 'text':     text,
                 'source':   title,
                 'matched':  ", ".join(matched)
@@ -2784,7 +2799,7 @@ async def _scan_discussion_users_bg(userbot, discussion_id: int, source_link: st
                     _sname = (getattr(_snd, 'first_name', '') or '') + ' ' + (getattr(_snd, 'last_name', '') or '')
                     _sname = _sname.strip()
                     _suname = getattr(_snd, 'username', '') or ''
-                _mdate = msg.date.strftime("%Y-%m-%d %H:%M") if getattr(msg, 'date', None) else ""
+                _mdate = _fmt_date(getattr(msg, 'date', None))
                 _cache_batch.append(
                     (msg.id, source_link, msg.sender_id, _sname, _suname, _txt, _mdate)
                 )
@@ -3169,7 +3184,7 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
                 if sender and hasattr(sender, 'first_name'):
                     s_name = ((sender.first_name or "") + " " + (sender.last_name or "")).strip()
                     s_un   = getattr(sender, 'username', '') or ""
-                msg_dt = msg.date.strftime("%Y-%m-%d %H:%M") if msg.date else ""
+                msg_dt = _fmt_date(msg.date)
                 _cache_batch.append((msg.id, _cache_src, s_id, s_name, s_un, msg.text[:2000], msg_dt))
 
             # A'zolarni partiya bilan yozish (INSERT OR IGNORE — mavjudni o'chirmaydi)
@@ -3613,7 +3628,7 @@ async def _cache_realtime_message(msg, src_str: str):
         elif sender and hasattr(sender, 'title'):
             s_name = sender.title or ""
             s_un = getattr(sender, 'username', '') or ""
-        msg_dt = msg.date.strftime("%Y-%m-%d %H:%M") if msg.date else ""
+        msg_dt = _fmt_date(msg.date)
         row = (msg.id, src_str, s_id, s_name, s_un, text[:2000], msg_dt)
         try:
             _RT_MSG_QUEUE.put_nowait(row)
@@ -4137,7 +4152,7 @@ async def sync_source_messages(userbot, source: str, limit_days: int = 90):
             elif sender and hasattr(sender, 'title'):
                 s_name = sender.title or ""
 
-            msg_date = msg.date.strftime("%Y-%m-%d %H:%M") if msg.date else ""
+            msg_date = _fmt_date(msg.date)
 
             async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
                 try:
