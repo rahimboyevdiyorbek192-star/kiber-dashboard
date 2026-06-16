@@ -780,19 +780,13 @@ async def get_active_alerts():
 
 async def check_and_record_alert_hit(alert_id: int, msg_id: int, source: str, sender_id: int) -> bool:
     async with connect(DB_NAME, timeout=30) as db:
-        async with db.execute(
-            "SELECT 1 FROM alert_hits WHERE alert_id=? AND msg_id=? AND source=?",
-            (alert_id, msg_id, source)
-        ) as cur:
-            if await cur.fetchone():
-                return False
         try:
-            await db.execute(
-                "INSERT INTO alert_hits (alert_id, msg_id, source, sender_id) VALUES (?,?,?,?)",
+            cur = await db.execute(
+                "INSERT OR IGNORE INTO alert_hits (alert_id, msg_id, source, sender_id) VALUES (?,?,?,?)",
                 (alert_id, msg_id, source, sender_id)
             )
             await db.commit()
-            return True
+            return cur.rowcount > 0
         except Exception:
             return False
 

@@ -4136,6 +4136,25 @@ async def sync_source_messages(userbot, source: str, limit_days: int = 90):
     saved = 0
     new_last_id = last_id
     msg_counter = 0
+    _batch = []
+
+    async def _flush_batch():
+        nonlocal saved
+        if not _batch:
+            return
+        try:
+            async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
+                await db.executemany(
+                    "INSERT OR IGNORE INTO messages_cache "
+                    "(msg_id, source, sender_id, sender_name, sender_username, text, msg_date) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    _batch
+                )
+                await db.commit()
+                saved += len(_batch)
+        except Exception as e:
+            _dbg("sync_source_messages", e)
+        _batch.clear()
 
     try:
         async for msg in userbot.iter_messages(
@@ -4181,29 +4200,19 @@ async def sync_source_messages(userbot, source: str, limit_days: int = 90):
                 s_name = sender.title or ""
 
             msg_date = _fmt_date(msg.date)
-
-            async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
-                try:
-                    await db.execute(
-                        "INSERT OR IGNORE INTO messages_cache "
-                        "(msg_id, source, sender_id, sender_name, sender_username, text, msg_date) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (msg.id, source, s_id, s_name, s_un, text, msg_date)
-                    )
-                    await db.commit()
-                    saved += 1
-                except Exception as e:
-                    _dbg("sync_source_messages", e)
+            _batch.append((msg.id, source, s_id, s_name, s_un, text, msg_date))
 
             if msg.id > new_last_id:
                 new_last_id = msg.id
 
             msg_counter += 1
-            # Har 100 xabarda 2 sekund nafas — flood oldini olish
-            if msg_counter % 100 == 0:
+            if msg_counter % 200 == 0:
+                await _flush_batch()
                 await asyncio.sleep(2)
             else:
                 await asyncio.sleep(0.03)
+
+        await _flush_batch()
 
     except FloodWaitError as e:
         # Flood bo'lsa — holatni saqlash va chiqish (keyingi sinxronda davom etadi)
