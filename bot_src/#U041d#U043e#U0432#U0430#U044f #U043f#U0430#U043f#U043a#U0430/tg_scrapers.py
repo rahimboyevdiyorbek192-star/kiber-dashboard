@@ -3912,46 +3912,15 @@ async def _match_new_channel_to_pending(ub, bot, admin_id, idx, channel_id):
 
 async def channel_join_watcher(userbot, bot, admin_id, extra_userbots=None):
     """
-    Maxfiy kanallar ochilishini kuzatadi:
-    - Real-time: UpdateChannel Raw event (0 API) — asosiy yo'l
-    - Backup (har 5 daqiqa): dialog diff — event o'tkazib yuborilgan holatlar uchun
+    Maxfiy kanallar ochilishini kuzatadi — 2 ta usul:
+    - Real-time: UpdateChannel Raw event (0 API)
+    - Har 15 daqiqa: CheckChatInviteRequest (smart_channel_knocker)
+    iter_dialogs poll olib tashlandi — faqat flood beradi.
     """
-    all_bots = [userbot] + [u for u in (extra_userbots or []) if u is not None]
-
-    await asyncio.sleep(120)  # 2 daqiqa kuting
-
-    # Boshlang'ich dialog holati yodlab olinadi
-    known_ids = {}
-    for idx, ub in enumerate(all_bots):
-        known_ids[idx] = await _get_channel_dialog_ids(ub)
-        print(f"[WATCHER] UB{idx+1}: {len(known_ids[idx])} ta kanal yodlandi")
-
-    last_backup = datetime.now()
-
-    while True:
-        try:
-            # 5 daqiqa — UpdateChannel event asosiy yo'l, bu faqat backup
-            await asyncio.sleep(300)
-            if MONITORING_PAUSED:
-                continue
-
-            # === Layer 1: Dialog diff ===
-            for idx, ub in enumerate(all_bots):
-                current = await _get_channel_dialog_ids(ub)
-                new_ids = current - known_ids[idx]
-                known_ids[idx] = current
-                if new_ids:
-                    print(f"[WATCHER] UB{idx+1}: {len(new_ids)} ta yangi kanal!")
-                    for cid in new_ids:
-                        asyncio.create_task(
-                            _match_new_channel_to_pending(ub, bot, admin_id, idx, cid)
-                        )
-
-            # 2-soatlik backup olib tashlandi:
-            # UpdateChannel event handler barcha holatni qoplaydi (0 API)
-
-        except Exception as e:
-            print(f"[WATCHER] Xato: {e}")
+    # Bu funksiya endi faqat ishga tushganligini bildiradi.
+    # Asosiy ish: setup_realtime_handlers → _check_channel_opened (UpdateChannel)
+    #             smart_channel_knocker (har 15 daqiqa CheckChatInviteRequest)
+    print("[WATCHER] Kanal kuzatuv ishga tushdi (real-time + 15 daqiqa so'rovnoma)")
 
 
 async def _distribute_channels(n: int):
