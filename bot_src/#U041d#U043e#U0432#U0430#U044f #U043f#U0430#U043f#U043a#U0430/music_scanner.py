@@ -594,10 +594,11 @@ async def search_music(audio_path, threshold=0.65):
     arr_query_parsed = parse_fingerprint(fp_query)
 
     def _best_score(arr_db, fp_db_str):
-        """Oddiy + sliding taqqoslash — yuqorirog'ini qaytaradi."""
+        """Avval tez (oddiy), yetmasa sliding."""
         s1 = compare_fp_arrays(arr_query_parsed, arr_db)
-        s2 = compare_fingerprints_sliding(fp_query, fp_db_str)
-        return max(s1, s2)
+        if s1 >= threshold:
+            return s1
+        return compare_fingerprints_sliding(fp_query, fp_db_str)
 
     # LSH indeks qurilgan bo'lsa — tez yo'l
     if _lsh_index:
