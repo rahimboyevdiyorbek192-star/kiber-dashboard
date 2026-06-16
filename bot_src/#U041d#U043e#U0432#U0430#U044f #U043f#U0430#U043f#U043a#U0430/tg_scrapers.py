@@ -8,7 +8,7 @@ import urllib.parse
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-from openpyxl.formatting.rule import PatternFill as _CFPatternFill, FormulaRule
+from openpyxl.formatting.rule import FormulaRule
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.functions.contacts import ImportContactsRequest, DeleteContactsRequest
 from telethon.tl.types import InputPhoneContact
@@ -675,7 +675,7 @@ def apply_excel_styles(ws, total_rows):
         cell.border    = thin_border
 
     # 2. Juft qatorlar — Excel o'zi rang beradi (conditional formatting, 1 qoida)
-    even_fill = _CFPatternFill(fill_type="solid", fgColor="DEEAF1")
+    even_fill = PatternFill(fill_type="solid", fgColor="DEEAF1")
     ws.conditional_formatting.add(
         data_range,
         FormulaRule(formula=["MOD(ROW(),2)=0"], fill=even_fill)
