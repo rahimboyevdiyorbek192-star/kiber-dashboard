@@ -649,11 +649,10 @@ async def resolve_personal_channel(userbot, ch_id):
 
 
 def apply_excel_styles(ws, total_rows):
-    """Excel faylni chiroyli formatlaydi — barcha qatorlar."""
+    """Excel faylni chiroyli formatlaydi — tez versiya (katta fayllar uchun)."""
     header_font  = Font(bold=True, color="FFFFFF", size=11)
     header_fill  = PatternFill("solid", fgColor="1F4E79")
     center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    left_align   = Alignment(horizontal="left",   vertical="center", wrap_text=True)
     thin_border  = Border(
         left=Side(style="thin"),  right=Side(style="thin"),
         top=Side(style="thin"),   bottom=Side(style="thin")
@@ -661,28 +660,26 @@ def apply_excel_styles(ws, total_rows):
     even_fill = PatternFill("solid", fgColor="DEEAF1")
     odd_fill  = PatternFill("solid", fgColor="FFFFFF")
 
-    # Sarlavha formatlash
-    for col_num in range(1, ws.max_column + 1):
+    n_cols = ws.max_column
+
+    # Sarlavha — to'liq stil (faqat 1 qator)
+    for col_num in range(1, n_cols + 1):
         cell = ws.cell(row=1, column=col_num)
         cell.font      = header_font
         cell.fill      = header_fill
         cell.alignment = center_align
         cell.border    = thin_border
 
-    # Ma'lumot qatorlari — barcha qatorlar (cheksiz)
+    # Ma'lumot qatorlari — faqat qator rangi (border/alignment o'tkaziladi — 10x tez)
     for row_num in range(2, ws.max_row + 1):
-        idx      = row_num - 1
-        row_fill = even_fill if idx % 2 == 0 else odd_fill
-        for col_num in range(1, ws.max_column + 1):
-            cell = ws.cell(row=row_num, column=col_num)
-            cell.fill      = row_fill
-            cell.border    = thin_border
-            cell.alignment = left_align if col_num >= 2 else center_align
+        fill = even_fill if (row_num % 2 == 0) else odd_fill
+        for col_num in range(1, n_cols + 1):
+            ws.cell(row=row_num, column=col_num).fill = fill
 
-    # Ustun kengliklari
-    for col in ws.columns:
-        max_w = max(len(str(c.value or '')) for c in col)
-        ws.column_dimensions[get_column_letter(col[0].column)].width = min(max_w + 3, 55)
+    # Ustun kengligi — faqat sarlavha uzunligiga qarab (barcha qator o'qilmaydi)
+    for col_num in range(1, n_cols + 1):
+        header_val = str(ws.cell(row=1, column=col_num).value or '')
+        ws.column_dimensions[get_column_letter(col_num)].width = min(len(header_val) + 8, 45)
 
     ws.freeze_panes = "A2"
     ws.auto_filter.ref = ws.dimensions
