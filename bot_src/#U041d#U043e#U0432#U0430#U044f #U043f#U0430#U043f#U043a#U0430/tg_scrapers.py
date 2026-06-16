@@ -727,12 +727,11 @@ async def _ds_process_user(ub, user, target_group):
         if inv:
             maxfiy = ", ".join(inv)
             async with db_mod.connect(db_mod.DB_NAME, timeout=30) as _db:
-                for lnk in inv:
-                    await _db.execute(
-                        "INSERT OR IGNORE INTO hidden_channel_knocker "
-                        "(channel_id, creator_id, source_group) VALUES (?,?,?)",
-                        (lnk, uid, str(target_group))
-                    )
+                await _db.executemany(
+                    "INSERT OR IGNORE INTO hidden_channel_knocker "
+                    "(channel_id, creator_id, source_group) VALUES (?,?,?)",
+                    [(lnk, uid, str(target_group)) for lnk in inv]
+                )
                 await _db.commit()
         al = extract_bio_links(bio)
         oc = [l for l in al if l.startswith('@') or
@@ -1141,12 +1140,11 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
                                     _shaxsiy = await _pc_link_cached(userbot, pc, chats=getattr(fi, 'chats', None))
                                 if inv:
                                     async with db_mod.connect(db_mod.DB_NAME, timeout=30) as _db:
-                                        for lnk in inv:
-                                            await _db.execute(
-                                                "INSERT OR IGNORE INTO hidden_channel_knocker "
-                                                "(channel_id, creator_id, source_group) VALUES (?,?,?)",
-                                                (lnk, sender.id, str(target_group))
-                                            )
+                                        await _db.executemany(
+                                            "INSERT OR IGNORE INTO hidden_channel_knocker "
+                                            "(channel_id, creator_id, source_group) VALUES (?,?,?)",
+                                            [(lnk, sender.id, str(target_group)) for lnk in inv]
+                                        )
                                         await _db.commit()
                             except FloodWaitError as e:
                                 _record_flood(e.seconds)
@@ -1286,12 +1284,11 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
                     shaxsiy = await _pc_link_cached(userbot, pc, chats=getattr(fi, 'chats', None))
                 if inv:
                     async with db_mod.connect(db_mod.DB_NAME, timeout=30) as _db:
-                        for lnk in inv:
-                            await _db.execute(
-                                "INSERT OR IGNORE INTO hidden_channel_knocker "
-                                "(channel_id, creator_id, source_group) VALUES (?,?,?)",
-                                (lnk, uid, str(target_group))
-                            )
+                        await _db.executemany(
+                            "INSERT OR IGNORE INTO hidden_channel_knocker "
+                            "(channel_id, creator_id, source_group) VALUES (?,?,?)",
+                            [(lnk, uid, str(target_group)) for lnk in inv]
+                        )
                         await _db.commit()
             except FloodWaitError as e:
                 _record_flood(e.seconds)
@@ -1623,12 +1620,11 @@ async def background_profile_tracker(userbot, ub_idx: int = 0, n_userbots: int =
                     if invite_links:
                         has_hidden = ", ".join(invite_links)
                         async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
-                            for inv_link in invite_links:
-                                await db.execute(
-                                    "INSERT OR IGNORE INTO hidden_channel_knocker "
-                                    "(channel_id, creator_id, source_group) VALUES (?, ?, ?)",
-                                    (inv_link, uid, "Monitoring")
-                                )
+                            await db.executemany(
+                                "INSERT OR IGNORE INTO hidden_channel_knocker "
+                                "(channel_id, creator_id, source_group) VALUES (?, ?, ?)",
+                                [(inv_link, uid, "Monitoring") for inv_link in invite_links]
+                            )
                             await db.commit()
                     elif getattr(fi.full_user, 'personal_channel_id', None):
                         ch_id = fi.full_user.personal_channel_id
@@ -2020,13 +2016,12 @@ async def scan_messages(userbot, target, output_path, status_msg, days=None,
                 if inv_links:
                     maxfiy = ", ".join(inv_links)
                     async with db_mod.connect(db_mod.DB_NAME, timeout=30) as db:
-                        for inv in inv_links:
-                            await db.execute(
-                                "INSERT OR IGNORE INTO hidden_channel_knocker "
-                                "(channel_id, creator_id, source_group) "
-                                "VALUES (?, ?, ?)",
-                                (inv, uid, str(target))
-                            )
+                        await db.executemany(
+                            "INSERT OR IGNORE INTO hidden_channel_knocker "
+                            "(channel_id, creator_id, source_group) "
+                            "VALUES (?, ?, ?)",
+                            [(inv, uid, str(target)) for inv in inv_links]
+                        )
                         await db.commit()
                 ch_id = getattr(fi.full_user, 'personal_channel_id', None)
                 if ch_id:
@@ -2468,13 +2463,12 @@ async def scan_channel_comments(userbot, target, output_path, status_msg,
                     if inv_links:
                         maxfiy = ", ".join(inv_links)
                         async with db_mod.connect(db_mod.DB_NAME, timeout=30) as _db2:
-                            for inv in inv_links:
-                                await _db2.execute(
-                                    "INSERT OR IGNORE INTO hidden_channel_knocker "
-                                    "(channel_id, creator_id, source_group) "
-                                    "VALUES (?, ?, ?)",
-                                    (inv, uid, str(target))
-                                )
+                            await _db2.executemany(
+                                "INSERT OR IGNORE INTO hidden_channel_knocker "
+                                "(channel_id, creator_id, source_group) "
+                                "VALUES (?, ?, ?)",
+                                [(inv, uid, str(target)) for inv in inv_links]
+                            )
                             await _db2.commit()
                     ch_id = getattr(fi.full_user, 'personal_channel_id', None)
                     # 777 va 1_000_000 dan kichik ID — Telegram tizimiy, real kanal emas.
@@ -2875,12 +2869,11 @@ async def _scan_discussion_users_bg(userbot, discussion_id: int, source_link: st
                         maxfiy = ", ".join(inv_links)
                         try:
                             async with db_mod.connect(db_mod.DB_NAME, timeout=30) as _db:
-                                for inv in inv_links:
-                                    await _db.execute(
-                                        "INSERT OR IGNORE INTO hidden_channel_knocker "
-                                        "(channel_id, creator_id, source_group) VALUES (?,?,?)",
-                                        (inv, uid, source_link)
-                                    )
+                                await _db.executemany(
+                                    "INSERT OR IGNORE INTO hidden_channel_knocker "
+                                    "(channel_id, creator_id, source_group) VALUES (?,?,?)",
+                                    [(inv, uid, source_link) for inv in inv_links]
+                                )
                                 await _db.commit()
                         except Exception as e:
                             _dbg("_process_user", e)
