@@ -127,13 +127,13 @@ async def get_stats():
 # FINGERPRINT OLISH
 # ─────────────────────────────────────────────────────────────────────
 
-async def get_fingerprint_async(audio_path):
+async def get_fingerprint_async(audio_path, full=False):
     """Async wrapper — event loopni bloklamaydi (thread poolda ishlaydi)."""
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, get_fingerprint, audio_path)
+    return await loop.run_in_executor(None, get_fingerprint, audio_path, full)
 
 
-def get_fingerprint(audio_path):
+def get_fingerprint(audio_path, full=False):
     """
     Audio fayldan fingerprint oladi.
     chromaprint (fpcalc) yordamida.
@@ -149,8 +149,11 @@ def get_fingerprint(audio_path):
         fpcalc_path = "fpcalc"  # PATH dan qidirish
 
     try:
+        cmd = [fpcalc_path, "-raw", audio_path]
+        if full:
+            cmd = [fpcalc_path, "-raw", "-length", "0", audio_path]
         result = subprocess.run(
-            [fpcalc_path, "-raw", "-length", "0", audio_path],
+            cmd,
             capture_output=True, text=True, timeout=60
         )
         if result.returncode != 0:
