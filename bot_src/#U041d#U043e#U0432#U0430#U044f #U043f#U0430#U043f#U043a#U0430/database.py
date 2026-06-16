@@ -5,6 +5,15 @@ import aiosqlite
 from contextlib import asynccontextmanager
 from datetime import datetime
 
+# .env ni shu yerda ham yuklaymiz — import tartibidan qat'i nazar
+# DATABASE_URL to'g'ri o'qilishi uchun (main.py load_dotenv() dan oldin
+# import qilsa ham ishlaydi).
+try:
+    from dotenv import load_dotenv as _load_dotenv
+    _load_dotenv()
+except Exception:
+    pass
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_NAME  = os.path.join(BASE_DIR, "cyber_station.db")
 
