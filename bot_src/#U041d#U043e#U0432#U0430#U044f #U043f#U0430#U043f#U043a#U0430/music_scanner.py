@@ -696,9 +696,12 @@ async def check_against_watch_list(fingerprint, threshold=0.65):
     # Query fingerprint bir marta parse qilinadi
     arr_query = parse_fingerprint(fingerprint) if isinstance(fingerprint, str) else fingerprint
 
+    fp_query_str = fingerprint if isinstance(fingerprint, str) else None
     for w_id, w_name, w_fp, admin_id in watches:
         arr_watch = parse_fingerprint(w_fp)
         score = compare_fp_arrays(arr_query, arr_watch)
+        if score < threshold and fp_query_str:
+            score = compare_fingerprints_sliding(fp_query_str, w_fp)
         if score >= threshold:
             results.append({
                 'watch_id':   w_id,
