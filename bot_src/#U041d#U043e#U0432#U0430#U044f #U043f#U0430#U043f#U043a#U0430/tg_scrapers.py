@@ -4070,13 +4070,9 @@ async def smart_channel_knocker(userbot, bot, admin_id, extra_userbots=None):
                             except Exception as e2:
                                 err2 = str(e2).lower()
                                 if "already" in err2 or "member" in err2:
-                                    # a'zo, lekin entity yo'q — dialoglarda qidiramiz
+                                    # a'zo — to'g'ridan-to'g'ri get_entity
                                     try:
-                                        async for dialog in ub.iter_dialogs(limit=200):
-                                            inv = getattr(dialog.entity, 'username', None)
-                                            if inv and inv in ch_id_str:
-                                                entity = dialog.entity
-                                                break
+                                        entity = await ub.get_entity(ch_id_str)
                                     except Exception as e:
                                         _dbg("smart_channel_knocker", e)
                                 else:
