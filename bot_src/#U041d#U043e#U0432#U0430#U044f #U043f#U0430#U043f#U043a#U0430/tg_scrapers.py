@@ -3864,17 +3864,6 @@ async def _notify_channel_joined(ub, bot, admin_id, idx, entity, ch_id_str, ch_i
     print(f"[WATCHER] ✅ Kanal ochildi (UB{idx+1} ga biriktirildi): {ch_name}")
 
 
-async def _get_channel_dialog_ids(ub) -> set:
-    """Userbot a'zo bo'lgan barcha kanal ID larini set qaytaradi."""
-    ids = set()
-    try:
-        async for dialog in ub.iter_dialogs(limit=500):
-            if hasattr(dialog.entity, 'id'):
-                ids.add(dialog.entity.id)
-    except Exception as e:
-        _dbg("_get_channel_dialog_ids", e)
-    return ids
-
 
 async def _match_new_channel_to_pending(ub, bot, admin_id, idx, channel_id):
     """

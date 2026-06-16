@@ -222,61 +222,6 @@ def compare_fp_arrays(arr1, arr2):
 # BARCHA MANBALARDAN KANAL/GURUH LISTINI OLISH
 # ─────────────────────────────────────────────────────────────────────
 
-def compare_fingerprints_sliding(fp1, fp2, window=100):
-    """
-    Sliding window taqqoslash — kesilgan/offset qo'shiqlarni ham topadi.
-    fp1: qidirilayotgan musiqa (query)
-    fp2: bazadagi musiqa (database)
-    Ikkala tomonda ham siljitiladi — faqat bittasini siljitish xato edi.
-    Numpy mavjud bo'lsa inner loop NumPy XOR bilan almashtiriladi.
-    """
-    try:
-        nums1 = list(map(int, fp1.split(',')))
-        nums2 = list(map(int, fp2.split(',')))
-
-        if not nums1 or not nums2:
-            return 0.0
-
-        best_score = 0.0
-        len1, len2 = len(nums1), len(nums2)
-        win = min(window, len1, len2)
-        step = max(1, win // 2)
-
-        # fp2 (DB) bo'ylab siljitish
-        for off2 in range(0, len2 - win + 1, step):
-            chunk2 = nums2[off2:off2 + win]
-            # fp1 (query) bo'ylab ham siljitish — offset yuklashda ham topilsin
-            for off1 in range(0, min(len1, win * 2) - win + 1, step):
-                chunk1 = nums1[off1:off1 + win]
-                if len(chunk1) < win or len(chunk2) < win:
-                    continue
-
-                if _HAS_NUMPY:
-                    a = np.array(chunk1, dtype=np.uint32)
-                    b = np.array(chunk2, dtype=np.uint32)
-                    xor = np.bitwise_xor(a, b)
-                    diff_bits = int(np.unpackbits(xor.view(np.uint8)).sum())
-                    total_bits = win * 32
-                    score = (total_bits - diff_bits) / total_bits
-                else:
-                    total_bits = 0
-                    matching_bits = 0
-                    for a, b in zip(chunk1, chunk2):
-                        xor = a ^ b
-                        diff_bits = bin(xor & 0xFFFFFFFF).count('1')
-                        total_bits += 32
-                        matching_bits += (32 - diff_bits)
-                    score = matching_bits / total_bits if total_bits > 0 else 0.0
-
-                if score > best_score:
-                    best_score = score
-                    if best_score >= 0.95:  # Juda yaxshi mos — to'xtatish
-                        return best_score
-
-        return best_score
-    except Exception:
-        return 0.0
-
 
 # ─────────────────────────────────────────────────────────────────────
 # LSH INDEKS (tez qidirish uchun)

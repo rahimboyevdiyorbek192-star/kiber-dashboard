@@ -1948,18 +1948,6 @@ async def watch_alert_sender():
         finally:
             engine._WATCH_ALERTS.task_done()
 
-    # ── Alert xabarlari uchun handler ──────────────────────────────
-    # (yuqoridagi loop dan keyin hech qachon yetib kelmaydi, lekin xavfsizlik uchun)
-
-
-async def _handle_alert_queue_item(item):
-    """Alert queue dan kelgan xabarni qayta ishlash."""
-    try:
-        kind, data = item
-        if kind == 'alert':
-            await process_alert_hits([data])
-    except Exception as e:
-        engine._dbg("main._handle_alert_queue_item", e)
 
 
 @bot.on(events.NewMessage(pattern='/clean_tmp'))
