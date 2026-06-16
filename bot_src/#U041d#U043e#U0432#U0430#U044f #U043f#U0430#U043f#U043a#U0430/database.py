@@ -921,6 +921,17 @@ async def assign_channel(channel_link: str, n_userbots: int) -> int:
         await db.commit()
         return min_idx
 
+async def assign_channel_force(channel_link: str, userbot_idx: int):
+    """Kanalni berilgan userbot_idx ga majburan biriktiradi (round-robin uchun)."""
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    async with connect(DB_NAME, timeout=10) as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO channel_assignments (channel_link, userbot_idx, assigned_at) "
+            "VALUES (?, ?, ?)",
+            (channel_link, userbot_idx, now_str)
+        )
+        await db.commit()
+
 async def get_userbot_channels(userbot_idx: int) -> list:
     """Userbotga biriktirilgan barcha kanallar ro'yxatini qaytaradi."""
     async with connect(DB_NAME, timeout=10) as db:

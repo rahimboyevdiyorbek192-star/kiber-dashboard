@@ -3464,13 +3464,23 @@ async def music_channel_tracker(userbot, userbot2=None):
             else:
                 # N userbot — har kanal o'z userbotiga biriktirilgan
                 ub_lists = [[] for _ in range(n_ub)]
-                for source in sources:
-                    ss = str(source)
+                # Avval barchasini DB dan ol — yangilari uchun round-robin counter
+                _rr_counter = [0]  # round-robin taqsimlash uchun
+
+                async def _get_or_assign(ss):
                     idx = await db_mod.get_channel_userbot(ss)
                     if idx is None:
-                        # Yangi kanal — avtomatik biriktir
-                        idx = await db_mod.assign_channel(ss, n_ub)
-                    if idx < n_ub:
+                        # Yangi kanal — round-robin bilan biriktir (DB ga yozmasdan)
+                        # keyin DB ga saqlash uchun assign_channel chaqiramiz
+                        idx = _rr_counter[0] % n_ub
+                        _rr_counter[0] += 1
+                        await db_mod.assign_channel_force(ss, idx)
+                    return idx
+
+                for source in sources:
+                    ss = str(source)
+                    idx = await _get_or_assign(ss)
+                    if 0 <= idx < n_ub:
                         ub_lists[idx].append(source)
                     else:
                         ub_lists[0].append(source)
