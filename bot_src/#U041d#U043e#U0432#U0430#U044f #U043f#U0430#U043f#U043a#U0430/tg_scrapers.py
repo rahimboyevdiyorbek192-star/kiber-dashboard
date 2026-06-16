@@ -8,6 +8,7 @@ import urllib.parse
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.formatting.rule import PatternFill as _CFPatternFill, FormulaRule
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.functions.contacts import ImportContactsRequest, DeleteContactsRequest
 from telethon.tl.types import InputPhoneContact
@@ -649,7 +650,14 @@ async def resolve_personal_channel(userbot, ch_id):
 
 
 def apply_excel_styles(ws, total_rows):
-    """Excel faylni chiroyli formatlaydi — tez versiya (katta fayllar uchun)."""
+    """Excel faylni chiroyli formatlaydi.
+    Ma'lumot qatorlari rangini Excel o'zi beradi (conditional formatting) —
+    Python faqat bitta qoida yozadi, deyarli tezkor."""
+    n_cols    = ws.max_column
+    last_row  = ws.max_row
+    last_col  = get_column_letter(n_cols)
+    data_range = f"A2:{last_col}{last_row}"
+
     header_font  = Font(bold=True, color="FFFFFF", size=11)
     header_fill  = PatternFill("solid", fgColor="1F4E79")
     center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
@@ -657,12 +665,8 @@ def apply_excel_styles(ws, total_rows):
         left=Side(style="thin"),  right=Side(style="thin"),
         top=Side(style="thin"),   bottom=Side(style="thin")
     )
-    even_fill = PatternFill("solid", fgColor="DEEAF1")
-    odd_fill  = PatternFill("solid", fgColor="FFFFFF")
 
-    n_cols = ws.max_column
-
-    # Sarlavha — to'liq stil (faqat 1 qator)
+    # 1. Sarlavha — to'liq stil (faqat 1 qator, tez)
     for col_num in range(1, n_cols + 1):
         cell = ws.cell(row=1, column=col_num)
         cell.font      = header_font
@@ -670,13 +674,14 @@ def apply_excel_styles(ws, total_rows):
         cell.alignment = center_align
         cell.border    = thin_border
 
-    # Ma'lumot qatorlari — faqat qator rangi (border/alignment o'tkaziladi — 10x tez)
-    for row_num in range(2, ws.max_row + 1):
-        fill = even_fill if (row_num % 2 == 0) else odd_fill
-        for col_num in range(1, n_cols + 1):
-            ws.cell(row=row_num, column=col_num).fill = fill
+    # 2. Juft qatorlar — Excel o'zi rang beradi (conditional formatting, 1 qoida)
+    even_fill = _CFPatternFill(fill_type="solid", fgColor="DEEAF1")
+    ws.conditional_formatting.add(
+        data_range,
+        FormulaRule(formula=["MOD(ROW(),2)=0"], fill=even_fill)
+    )
 
-    # Ustun kengligi — faqat sarlavha uzunligiga qarab (barcha qator o'qilmaydi)
+    # 3. Ustun kengligi — faqat sarlavhadan hisoblash (tez)
     for col_num in range(1, n_cols + 1):
         header_val = str(ws.cell(row=1, column=col_num).value or '')
         ws.column_dimensions[get_column_letter(col_num)].width = min(len(header_val) + 8, 45)
