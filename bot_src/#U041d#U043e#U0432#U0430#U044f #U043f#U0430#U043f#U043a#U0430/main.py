@@ -273,6 +273,27 @@ async def del_admin_handler(event):
     await db_mod.remove_admin(del_id)
     await event.respond(f"❌ `{del_id}` o'chirildi.")
 
+@bot.on(events.NewMessage(pattern=r'/yuklash(?:\s+(\d+))?'))
+async def music_parallel_handler(event):
+    """Har userbot bir vaqtda nechta musiqa parallel yuklashini sozlaydi."""
+    if not await is_admin(event.sender_id):
+        return
+    arg = _pm(event, 1)
+    if not arg:
+        await event.respond(
+            f"🎵 **Musiqa parallel yuklash**\n\n"
+            f"Hozir: har userbot bir vaqtda `{engine.MUSIC_PARALLEL}` ta musiqa yuklaydi.\n\n"
+            f"O'zgartirish: `/yuklash 5` (1–10 oralig'ida)\n"
+            f"⚠️ Ko'p qilsangiz tezroq, lekin Telegram flood berishi mumkin."
+        )
+        return
+    n = engine.set_music_parallel(int(arg))
+    await event.respond(
+        f"✅ Endi har userbot bir vaqtda `{n}` ta musiqa parallel yuklaydi.\n"
+        f"📌 Bu qiymat saqlandi — bot qayta yonsa ham `{n}` qoladi.\n"
+        f"ℹ️ Yangi kanallardan boshlab kuchga kiradi."
+    )
+
 # ─────────────────────────────────────────────────────────────────────
 # TUGMA: SKANERLASH (guruh / kanal / yopiq — avtomatik aniqlanadi)
 # ─────────────────────────────────────────────────────────────────────
