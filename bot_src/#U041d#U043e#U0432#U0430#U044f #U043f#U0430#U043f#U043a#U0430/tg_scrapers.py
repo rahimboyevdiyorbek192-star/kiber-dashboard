@@ -2990,6 +2990,7 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
         await asyncio.sleep(10)
     if MONITORING_PAUSED:
         return
+    _RESOURCE['profile_slow'] = True
 
     # ── Keshdan entity ID ni olish (get_entity chaqirmaslik uchun) ──────
     src_str = str(source).strip()
@@ -3358,6 +3359,7 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
         except Exception as e:
             print(f"Progress saqlash xatosi: {e}")
 
+    _RESOURCE['profile_slow'] = False
     await asyncio.sleep(random.uniform(1.5, 3.0))
 
 
