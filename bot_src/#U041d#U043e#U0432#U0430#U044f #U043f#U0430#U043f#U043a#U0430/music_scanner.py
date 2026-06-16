@@ -606,7 +606,7 @@ async def search_music(audio_path, threshold=0.65):
         candidates = lsh_candidates(arr_query_parsed)
         if candidates:
             for arr_db, (ch_id, ch_name, fname, dur) in candidates:
-                score = compare_fp_arrays(arr_query_parsed, arr_db)
+                score = _best_score(arr_db, fp_query)
                 if score >= threshold:
                     results.append({
                         'channel_id':   ch_id,
