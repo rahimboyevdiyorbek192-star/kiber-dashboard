@@ -683,16 +683,20 @@ def apply_excel_styles(ws, total_rows):
             FormulaRule(formula=["MOD(ROW(),2)=0"], fill=even_fill)
         )
 
-    # 3. Ustun kengligi — sarlavha + URL ustunlari keng bo'lsin
+    # 3. Ustun kengligi + ma'lumot qatorlarida wrap_text
     url_keywords = ('link', 'url', 'kanal', 'guruh', 'manba', 'havola', 'bio')
+    wrap_align = Alignment(horizontal="left", vertical="top", wrap_text=True)
     for col_num in range(1, n_cols + 1):
         header_val = str(ws.cell(row=1, column=col_num).value or '')
         base_width = len(header_val) + 8
         if any(k in header_val.lower() for k in url_keywords):
-            width = max(base_width, 38)
+            width = max(base_width, 32)
         else:
             width = max(base_width, 14)
-        ws.column_dimensions[get_column_letter(col_num)].width = min(width, 60)
+        ws.column_dimensions[get_column_letter(col_num)].width = min(width, 55)
+        # Ma'lumot qatorlariga wrap_text
+        for row_num in range(2, last_row + 1):
+            ws.cell(row=row_num, column=col_num).alignment = wrap_align
 
     ws.freeze_panes = "A2"
     ws.auto_filter.ref = ws.dimensions
