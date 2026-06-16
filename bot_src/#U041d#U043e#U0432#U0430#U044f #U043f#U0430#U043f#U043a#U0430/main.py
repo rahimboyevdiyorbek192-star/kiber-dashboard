@@ -643,7 +643,7 @@ async def btn_fayl(event):
     for j, (uid2, fn2, ln2, un2, ph2, bio2,
             oc2, hh2, grp2, added2, upd2) in enumerate(new_all_users, all_start_row):
         ph2_str  = ("+" + ph2) if ph2 else ""
-        un2_str  = ("@" + un2) if un2 else ""
+        un2_str  = (un2 if un2.startswith("@") else "@" + un2) if un2 else ""
         kanal_id2 = uid_to_kanal.get(uid2, "")
         maxfiy2  = ""
         shaxsiy2 = ""
@@ -1489,7 +1489,7 @@ async def run_multi_music_search(sender_id, files, status_msg):
                         row = await cur.fetchone()
                     if row:
                         fname, uname, phone, bio, has_hidden, open_ch, grp_link = row
-                        uname = ('@' + uname) if uname else ''
+                        uname = (uname if uname.startswith('@') else '@' + uname) if uname else ''
                         phone = ('+' + phone) if phone else ''
 
                     # Kanal ID (-100 formatida)
@@ -2874,7 +2874,7 @@ async def watch_archive_callback(event):
         _urow = user_data_map.get(src_id)
         if _urow:
             fname = _urow[0] or ""
-            uname = ('@' + _urow[1]) if _urow[1] else ""
+            uname = (_urow[1] if _urow[1].startswith('@') else '@' + _urow[1]) if _urow[1] else ""
             phone = ('+' + _urow[2]) if _urow[2] else ""
             grp_link = _urow[3] or ""
 
