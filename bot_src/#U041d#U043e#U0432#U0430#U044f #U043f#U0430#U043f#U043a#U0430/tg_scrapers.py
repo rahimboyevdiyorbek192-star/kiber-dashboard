@@ -724,7 +724,7 @@ def apply_excel_styles(ws, total_rows):
             width = max(base, 32)
         else:
             width = base
-        ws.column_dimensions[get_column_letter(col_num)].width = min(width, 70)
+        ws.column_dimensions[get_column_letter(col_num)].width = min(width, 80)
 
     ws.freeze_panes = "A2"
     ws.auto_filter.ref = ws.dimensions
