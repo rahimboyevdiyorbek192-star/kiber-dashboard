@@ -2739,6 +2739,12 @@ async def search_keywords(userbot, target, keywords_str, status_msg, days=None):
             if sender is None:
                 try:
                     sender = await msg.get_sender()
+                except FloodWaitError as fw:
+                    await asyncio.sleep(fw.seconds + 3)
+                    try:
+                        sender = await msg.get_sender()
+                    except Exception:
+                        continue
                 except Exception:
                     continue
             if not sender:

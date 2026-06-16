@@ -19,7 +19,9 @@ except ImportError:
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MUSIC_DB  = os.path.join(BASE_DIR, "music_fingerprints.db")
 
-SCANNING = False  # Fon skanerlash holati
+_SCANNING_LOCK = asyncio.Lock()   # coroutine-safe skanerlash holati
+SCANNING = False                  # tashqi ko'rish uchun (faqat o'qish)
+_DB_INITIALIZED = False
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -27,6 +29,10 @@ SCANNING = False  # Fon skanerlash holati
 # ─────────────────────────────────────────────────────────────────────
 
 async def init_music_db():
+    global _DB_INITIALIZED
+    if _DB_INITIALIZED:
+        return
+    _DB_INITIALIZED = True
     async with db_mod.connect(MUSIC_DB, timeout=30) as db:
         await db.execute("PRAGMA journal_mode=WAL")
         await db.execute("PRAGMA synchronous=NORMAL")
@@ -59,6 +65,20 @@ async def init_music_db():
                 added_date  TEXT
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS watch_alerts_log (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                watch_name  TEXT,
+                source_name TEXT,
+                source_id   TEXT,
+                source_type TEXT,
+                score       REAL,
+                found_date  TEXT
+            )
+        """)
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_mfp_channel ON music_fingerprints(channel_id)"
+        )
         await db.commit()
 
 
@@ -460,7 +480,6 @@ def _is_private_source(source: str) -> bool:
 
 async def _scan_source_list(userbot, sources, shared, status_msg, total_sources):
     """Bitta userbot bilan kanallar ro'yxatini skanerlaydi. shared — umumiy hisoblagich."""
-    global SCANNING
     for source in sources:
         if not SCANNING:
             break
@@ -527,33 +546,33 @@ async def scan_all_channels(userbot, bot, admin_id, status_msg=None, userbot2=No
     userbot2 berilsa: maxfiy kanallar→userbot1, ochiq kanallar→ikkala parallel.
     """
     global SCANNING
-    if SCANNING:
+    if _SCANNING_LOCK.locked():
         return
-    SCANNING = True
+    async with _SCANNING_LOCK:
+        SCANNING = True
+        await init_music_db()
+        sources = await get_all_sources()
+        total_sources = len(sources)
+        shared = {'audio': 0, 'scanned': 0, 'lock': asyncio.Lock()}
 
-    await init_music_db()
-    sources = await get_all_sources()
-    total_sources = len(sources)
-    shared = {'audio': 0, 'scanned': 0, 'lock': asyncio.Lock()}
+        try:
+            if userbot2 is None:
+                await _scan_source_list(userbot, sources, shared, status_msg, total_sources)
+            else:
+                already_private = [s for s in sources if _is_private_source(str(s))]
+                public          = [s for s in sources if not _is_private_source(str(s))]
 
-    try:
-        if userbot2 is None:
-            await _scan_source_list(userbot, sources, shared, status_msg, total_sources)
-        else:
-            already_private = [s for s in sources if _is_private_source(str(s))]
-            public          = [s for s in sources if not _is_private_source(str(s))]
+                mid  = (len(public) + 1) // 2
+                pub1 = public[:mid]
+                pub2 = public[mid:]
 
-            mid  = (len(public) + 1) // 2
-            pub1 = public[:mid]
-            pub2 = public[mid:]
-
-            await asyncio.gather(
-                _scan_source_list(userbot,  already_private + pub1, shared, status_msg, total_sources),
-                _scan_source_list(userbot2, pub2,                   shared, None,        total_sources),
-                return_exceptions=True
-            )
-    finally:
-        SCANNING = False
+                await asyncio.gather(
+                    _scan_source_list(userbot,  already_private + pub1, shared, status_msg, total_sources),
+                    _scan_source_list(userbot2, pub2,                   shared, None,        total_sources),
+                    return_exceptions=True
+                )
+        finally:
+            SCANNING = False
 
     return shared['scanned'], shared['audio']
 
@@ -570,8 +589,8 @@ async def search_music(audio_path, threshold=0.65):
     """
     await init_music_db()
 
-    # Berilgan audio fingerprint
-    fp_query, duration = get_fingerprint(audio_path)
+    # Berilgan audio fingerprint (thread pool — event loop bloklanmaydi)
+    fp_query, duration = await get_fingerprint_async(audio_path)
     if not fp_query:
         raise Exception(
             "Fingerprint olishda xatolik.\n"
@@ -695,14 +714,7 @@ async def check_against_watch_list(fingerprint, threshold=0.65):
 async def save_watch_alert_log(watch_name, source_name, source_id, source_type, score):
     """Topilgan musiqa arxivga saqlanadi."""
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    await init_music_db()
     async with db_mod.connect(MUSIC_DB, timeout=30) as db:
-        await db.execute(
-            "CREATE TABLE IF NOT EXISTS watch_alerts_log "
-            "(id INTEGER PRIMARY KEY AUTOINCREMENT, watch_name TEXT, "
-            "source_name TEXT, source_id TEXT, source_type TEXT, "
-            "score REAL, found_date TEXT)"
-        )
         await db.execute(
             "INSERT INTO watch_alerts_log "
             "(watch_name, source_name, source_id, source_type, score, found_date) "
@@ -714,15 +726,7 @@ async def save_watch_alert_log(watch_name, source_name, source_id, source_type, 
 
 async def get_watch_alerts_log(watch_name=None, limit=50):
     """Arxivdan topilganlarni olish."""
-    await init_music_db()
     async with db_mod.connect(MUSIC_DB, timeout=30) as db:
-        await db.execute(
-            "CREATE TABLE IF NOT EXISTS watch_alerts_log "
-            "(id INTEGER PRIMARY KEY AUTOINCREMENT, watch_name TEXT, "
-            "source_name TEXT, source_id TEXT, source_type TEXT, "
-            "score REAL, found_date TEXT)"
-        )
-        await db.commit()
         if watch_name:
             async with db.execute(
                 "SELECT watch_name, source_name, source_id, source_type, score, found_date "

@@ -1722,7 +1722,7 @@ async def _run_excel_batch_both(sender_id, part1, part2):
             "⚠️ 2-Userbot topilmadi. Qolgan kanallar 1-Userbot bilan skanerlanadi."
         )
         tasks.append(engine.excel_batch_scanner(
-            userbot, part1 + part2, bot, sender_id, userbot_idx=0
+            userbot, part2, bot, sender_id, userbot_idx=0
         ))
     if tasks:
         await asyncio.gather(*tasks, return_exceptions=True)

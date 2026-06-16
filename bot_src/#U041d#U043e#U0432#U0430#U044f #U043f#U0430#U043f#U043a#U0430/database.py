@@ -467,6 +467,9 @@ async def init_db():
                 created_at    TEXT DEFAULT (datetime('now'))
             )
         """)
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_keyword_alerts_active ON keyword_alerts(is_active)"
+        )
         await db.execute("""
             CREATE TABLE IF NOT EXISTS alert_hits (
                 id        INTEGER PRIMARY KEY AUTOINCREMENT,
