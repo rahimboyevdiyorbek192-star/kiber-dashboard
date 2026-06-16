@@ -218,6 +218,52 @@ def compare_fp_arrays(arr1, arr2):
         return _compare_nums_fast(arr1, arr2)
 
 
+def compare_fingerprints_sliding(fp1, fp2, window=100):
+    """
+    Sliding window taqqoslash — kesilgan/offset qo'shiqlarni ham topadi.
+    fp1: qidirilayotgan musiqa (query)
+    fp2: bazadagi musiqa (database)
+    """
+    try:
+        nums1 = list(map(int, fp1.split(',')))
+        nums2 = list(map(int, fp2.split(',')))
+        if not nums1 or not nums2:
+            return 0.0
+        best_score = 0.0
+        len1, len2 = len(nums1), len(nums2)
+        win = min(window, len1, len2)
+        step = max(1, win // 2)
+        for off2 in range(0, len2 - win + 1, step):
+            chunk2 = nums2[off2:off2 + win]
+            for off1 in range(0, min(len1, win * 2) - win + 1, step):
+                chunk1 = nums1[off1:off1 + win]
+                if len(chunk1) < win or len(chunk2) < win:
+                    continue
+                if _HAS_NUMPY:
+                    a = np.array(chunk1, dtype=np.uint32)
+                    b = np.array(chunk2, dtype=np.uint32)
+                    xor = np.bitwise_xor(a, b)
+                    diff_bits = int(np.unpackbits(xor.view(np.uint8)).sum())
+                    total_bits = win * 32
+                    score = (total_bits - diff_bits) / total_bits
+                else:
+                    total_bits = 0
+                    matching_bits = 0
+                    for a, b in zip(chunk1, chunk2):
+                        xor = a ^ b
+                        diff = bin(xor & 0xFFFFFFFF).count('1')
+                        total_bits += 32
+                        matching_bits += (32 - diff)
+                    score = matching_bits / total_bits if total_bits > 0 else 0.0
+                if score > best_score:
+                    best_score = score
+                    if best_score >= 0.95:
+                        return best_score
+        return best_score
+    except Exception:
+        return 0.0
+
+
 # ─────────────────────────────────────────────────────────────────────
 # BARCHA MANBALARDAN KANAL/GURUH LISTINI OLISH
 # ─────────────────────────────────────────────────────────────────────
@@ -547,6 +593,14 @@ async def search_music(audio_path, threshold=0.65):
     # Query fingerprint bir marta parse qilinadi — loop tashqarisida
     arr_query_parsed = parse_fingerprint(fp_query)
 
+    def _best_score(arr_db, fp_db_str):
+        """Oddiy + sliding taqqoslash — yuqorirog'ini qaytaradi."""
+        s1 = compare_fp_arrays(arr_query_parsed, arr_db)
+        if s1 >= 0.95:
+            return s1
+        s2 = compare_fingerprints_sliding(fp_query, fp_db_str)
+        return max(s1, s2)
+
     # LSH indeks qurilgan bo'lsa — tez yo'l
     if _lsh_index:
         candidates = lsh_candidates(arr_query_parsed)
@@ -578,7 +632,7 @@ async def search_music(audio_path, threshold=0.65):
                 break
             for ch_id, ch_name, fname, fp_db, dur in rows:
                 arr_db = parse_fingerprint(fp_db)
-                score = compare_fp_arrays(arr_query_parsed, arr_db)
+                score = _best_score(arr_db, fp_db)
                 if score >= threshold:
                     results.append({
                         'channel_id':   ch_id,
