@@ -252,8 +252,10 @@ async def connect(db_path=None, timeout=30):
                 raise
     else:
         async with aiosqlite.connect(db_path or DB_NAME, timeout=timeout) as db:
+            await db.execute("PRAGMA journal_mode=WAL")
             await db.execute("PRAGMA busy_timeout=30000")
             await db.execute("PRAGMA synchronous=NORMAL")
+            await db.execute("PRAGMA wal_autocheckpoint=1000")
             yield db
 
 async def init_db():
