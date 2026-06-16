@@ -705,6 +705,8 @@ def apply_excel_styles(ws, total_rows):
 
     # 2. Juft qatorlar — Excel o'zi rang beradi (conditional formatting, 1 qoida)
     # Ma'lumot qatori mavjud bo'lsagina (bo'sh varaqda A2:X1 noto'g'ri range bo'ladi)
+    # Avval eski qoidalarni tozalaymiz — aks holda har saqlashda qoida to'planib to'qnashadi
+    ws.conditional_formatting = ws.conditional_formatting.__class__()
     if last_row >= 2:
         data_range = f"A2:{last_col}{last_row}"
         even_fill = PatternFill(fill_type="solid", fgColor="DEEAF1")
