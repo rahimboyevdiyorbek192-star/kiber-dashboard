@@ -150,8 +150,8 @@ def get_fingerprint(audio_path):
 
     try:
         result = subprocess.run(
-            [fpcalc_path, "-raw", audio_path],
-            capture_output=True, text=True, timeout=30
+            [fpcalc_path, "-raw", "-length", "0", audio_path],
+            capture_output=True, text=True, timeout=60
         )
         if result.returncode != 0:
             return None, None
