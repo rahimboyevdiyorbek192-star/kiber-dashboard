@@ -656,7 +656,6 @@ def apply_excel_styles(ws, total_rows):
     n_cols    = ws.max_column
     last_row  = ws.max_row
     last_col  = get_column_letter(n_cols)
-    data_range = f"A2:{last_col}{last_row}"
 
     header_font  = Font(bold=True, color="FFFFFF", size=11)
     header_fill  = PatternFill("solid", fgColor="1F4E79")
@@ -675,11 +674,14 @@ def apply_excel_styles(ws, total_rows):
         cell.border    = thin_border
 
     # 2. Juft qatorlar — Excel o'zi rang beradi (conditional formatting, 1 qoida)
-    even_fill = PatternFill(fill_type="solid", fgColor="DEEAF1")
-    ws.conditional_formatting.add(
-        data_range,
-        FormulaRule(formula=["MOD(ROW(),2)=0"], fill=even_fill)
-    )
+    # Ma'lumot qatori mavjud bo'lsagina (bo'sh varaqda A2:X1 noto'g'ri range bo'ladi)
+    if last_row >= 2:
+        data_range = f"A2:{last_col}{last_row}"
+        even_fill = PatternFill(fill_type="solid", fgColor="DEEAF1")
+        ws.conditional_formatting.add(
+            data_range,
+            FormulaRule(formula=["MOD(ROW(),2)=0"], fill=even_fill)
+        )
 
     # 3. Ustun kengligi — faqat sarlavhadan hisoblash (tez)
     for col_num in range(1, n_cols + 1):
