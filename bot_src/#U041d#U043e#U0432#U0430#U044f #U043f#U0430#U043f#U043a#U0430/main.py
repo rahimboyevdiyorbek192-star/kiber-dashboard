@@ -1830,7 +1830,7 @@ async def watch_music_handler(event):
     tmp_path = os.path.join(BASE_DIR, f"watch_{event.sender_id}.ogg")
     try:
         await event.download_media(file=tmp_path)
-        fp, duration = await engine.music_mod.get_fingerprint_async(tmp_path, full=True)
+        fp, duration = await engine.music_mod.get_fingerprint_async(tmp_path)
         if not fp:
             await status.edit("❌ Fingerprint olishda xatolik. fpcalc.exe borligini tekshiring.")
             return
