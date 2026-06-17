@@ -2990,7 +2990,6 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
         await asyncio.sleep(10)
     if MONITORING_PAUSED:
         return
-    _RESOURCE['profile_slow'] = True
 
     # ── Keshdan entity ID ni olish (get_entity chaqirmaslik uchun) ──────
     src_str = str(source).strip()
@@ -3359,8 +3358,17 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
         except Exception as e:
             print(f"Progress saqlash xatosi: {e}")
 
-    _RESOURCE['profile_slow'] = False
     await asyncio.sleep(random.uniform(1.5, 3.0))
+
+
+async def _music_process_one_source_slow(userbot, source, userbot_idx=0):
+    """profile_slow flagini xavfsiz boshqaradi — try/finally har doim tiklaydi.
+    Musiqa skanerlash paytida profil tracker sekinlashadi (flood xavfi kamayadi)."""
+    _RESOURCE['profile_slow'] = True
+    try:
+        await _music_process_one_source(userbot, source, userbot_idx)
+    finally:
+        _RESOURCE['profile_slow'] = False
 
 
 async def _music_process_list(userbot, sources, userbot_idx=0):
@@ -3418,7 +3426,7 @@ async def _music_process_list(userbot, sources, userbot_idx=0):
         global _CURRENT_SCAN_CHANNEL
         _CURRENT_SCAN_CHANNEL = str(source)
         try:
-            await _music_process_one_source(userbot, source, userbot_idx)
+            await _music_process_one_source_slow(userbot, source, userbot_idx)
         except FloodWaitError as e:
             wait = e.seconds
             log_flood("music_channel_tracker", wait)
@@ -3471,7 +3479,7 @@ async def _secret_channel_queue_worker(all_bots):
         print(f"[SECRET-WORKER] UB{ub_idx_use+1} → maxfiy kanal skanerlanmoqda: {jc_name}")
         _CURRENT_SCAN_CHANNEL = jc_link
         try:
-            await _music_process_one_source(ub, jc_link, ub_idx_use)
+            await _music_process_one_source_slow(ub, jc_link, ub_idx_use)
             print(f"[SECRET-WORKER] Maxfiy kanal skaner tugadi: {jc_name}")
             if jc_bot and jc_adm:
                 try:
@@ -3517,7 +3525,7 @@ async def music_channel_tracker(userbot, userbot2=None):
                         await asyncio.sleep(5)
                         continue
                     try:
-                        await _music_process_one_source(userbot, source, userbot_idx=0)
+                        await _music_process_one_source_slow(userbot, source, userbot_idx=0)
                     except Exception as e:
                         print(f"Kanal xatosi ({source}): {e}")
             else:
