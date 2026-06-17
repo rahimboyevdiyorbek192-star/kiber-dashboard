@@ -3235,16 +3235,41 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
                     _now, _now
                 ))
 
+            sender = msg.sender
+            s_id   = getattr(sender, 'id', msg.sender_id or 0) if sender else (msg.sender_id or 0)
+            s_name = ""
+            s_un   = ""
+            if sender and hasattr(sender, 'first_name'):
+                s_name = ((sender.first_name or "") + " " + (sender.last_name or "")).strip()
+                s_un   = getattr(sender, 'username', '') or ""
+            msg_dt = _fmt_date(msg.date)
+
+            cache_text = ""
             if msg.text and len(msg.text) > 2:
-                sender = msg.sender
-                s_id   = getattr(sender, 'id', msg.sender_id or 0) if sender else (msg.sender_id or 0)
-                s_name = ""
-                s_un   = ""
-                if sender and hasattr(sender, 'first_name'):
-                    s_name = ((sender.first_name or "") + " " + (sender.last_name or "")).strip()
-                    s_un   = getattr(sender, 'username', '') or ""
-                msg_dt = _fmt_date(msg.date)
-                _cache_batch.append((msg.id, _cache_src, s_id, s_name, s_un, msg.text[:2000], msg_dt))
+                cache_text = msg.text[:2000]
+            elif is_music_file(msg):
+                audio = msg.audio or msg.voice or msg.document
+                _title = _perf = _fname = ""
+                for _attr in getattr(audio, 'attributes', []) or []:
+                    if _attr.__class__.__name__ == 'DocumentAttributeAudio':
+                        _title = getattr(_attr, 'title', '') or ""
+                        _perf  = getattr(_attr, 'performer', '') or ""
+                if msg.file and msg.file.name:
+                    _fname = msg.file.name
+                parts = []
+                if _perf:
+                    parts.append(_perf)
+                if _title:
+                    parts.append(_title)
+                if not parts and _fname:
+                    parts.append(_fname)
+                if parts:
+                    cache_text = "🎵 " + " - ".join(parts)
+                if msg.text:
+                    cache_text += ("\n" + msg.text[:200]) if cache_text else msg.text[:200]
+
+            if cache_text:
+                _cache_batch.append((msg.id, _cache_src, s_id, s_name, s_un, cache_text, msg_dt))
 
             # A'zolarni partiya bilan yozish (INSERT OR IGNORE — mavjudni o'chirmaydi)
             if len(_grp_members) >= 300:
