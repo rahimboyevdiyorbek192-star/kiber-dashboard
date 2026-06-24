@@ -3692,6 +3692,8 @@ async def _rt_writer_loop():
                         batch
                     )
                     await db.commit()
+                # Real-vaqt xabarlar uchun ham kalit so'z alertlarini tekshiramiz
+                asyncio.create_task(_check_batch_alerts(list(batch)))
             except Exception as e:
                 _dbg("_rt_writer_loop", e)
             await asyncio.sleep(0.3)  # kichik to'planish oynasi
