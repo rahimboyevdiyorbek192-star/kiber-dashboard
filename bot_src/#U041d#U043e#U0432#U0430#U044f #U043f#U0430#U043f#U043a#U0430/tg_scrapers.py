@@ -4472,12 +4472,7 @@ async def _get_cached_channel_link(source: str) -> str:
                 ) as cur:
                     row = await cur.fetchone()
                 if row and row[0] and str(row[0]).startswith('http'):
-                    cl = str(row[0])
-                    # Shaxsiy kanal keshda "t.me/c/<id>/1" bo'lib saqlanadi —
-                    # xabarga emas, kanalga ishora qilishi uchun /1 ni olib tashlaymiz.
-                    if '/c/' in cl and cl.rstrip('/').endswith('/1'):
-                        cl = cl.rstrip('/')[:-2]
-                    return cl
+                    return row[0]
                 # 2. hidden_channel_knocker — channel_id ba'zan invite havola
                 async with db.execute(
                     "SELECT channel_id FROM hidden_channel_knocker "
