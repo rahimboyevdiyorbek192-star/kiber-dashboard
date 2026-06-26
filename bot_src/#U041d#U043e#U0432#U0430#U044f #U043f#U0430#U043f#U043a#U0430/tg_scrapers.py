@@ -3395,7 +3395,11 @@ async def _music_process_one_source_slow(userbot, source, userbot_idx=0):
     try:
         return await _music_process_one_source(userbot, source, userbot_idx)
     finally:
-        _RESOURCE['profile_slow'] = False
+        # Og'ir skaner (guruh/keyword) flagga egalik qilsa, uni tozalamaymiz —
+        # u o'zining resource_stop'ida tiklaydi. Aks holda og'ir skaner davom
+        # etayotgan bo'lsa ham profil tracker noto'g'ri tezlashib ketardi.
+        if not _RESOURCE['heavy_scan']:
+            _RESOURCE['profile_slow'] = False
 
 
 async def _music_process_list(userbot, sources, userbot_idx=0):
