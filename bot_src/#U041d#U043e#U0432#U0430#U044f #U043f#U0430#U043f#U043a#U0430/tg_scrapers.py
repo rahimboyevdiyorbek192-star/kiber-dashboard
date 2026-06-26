@@ -3855,6 +3855,22 @@ async def _notify_channel_joined(ub, bot, admin_id, idx, entity, ch_id_str, ch_i
             )
         await db.commit()
 
+    # Invite havola → numeric_id keshga yoziladi. Busiz _music_process_one_source
+    # invite linkni keshda topa olmay 'is_invite' tarmog'ida darhol return qilib,
+    # maxfiy kanal musiqalari umuman skanerlanmay qolardi.
+    if numeric_id_str and ch_id_str:
+        try:
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+            async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _rdb:
+                await _rdb.execute(
+                    "INSERT OR REPLACE INTO resolved_channel_ids "
+                    "(channel_link, numeric_id, resolved_at, channel_name) VALUES (?,?,?,?)",
+                    (ch_id_str, numeric_id_str, now_str, ch_name)
+                )
+                await _rdb.commit()
+        except Exception as e:
+            _dbg("_notify_channel_joined", e)
+
     print(f"[WATCHER] 📨 Bot xabar yubormoqda → admin_id={admin_id}, kanal={ch_name}")
     try:
         await bot.send_message(
