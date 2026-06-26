@@ -1121,11 +1121,14 @@ async def run_keyword_search(sender_id, keyword, status_msg, days=None):
         chunk     = header
         chunk_num = 1
         for r in all_results:
+            _ch_link = r.get('channel_link', '')
+            _ch_part = f"📢 {_ch_link}\n" if _ch_link else ""
             line = (
                 f"👤 **{_md_escape(r['name'])}**"
                 + (f" (@{_md_escape(r['username'])})" if r['username'] else "")
                 + f"\n🆔 `{r['user_id']}`\n"
                 f"📍 {_md_escape(r['source'])}\n"
+                f"{_ch_part}"
                 f"📅 {r['date']}\n"
                 f"💬 {_md_escape(r['text'])}\n"
                 f"{'─' * 25}\n\n"

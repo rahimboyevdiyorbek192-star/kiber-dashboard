@@ -2794,6 +2794,7 @@ async def search_keywords(userbot, target, keywords_str, status_msg, days=None):
                 'date':     _fmt_date(msg.date),
                 'text':     text,
                 'source':   title,
+                'channel_link': await _get_cached_channel_link(str(target)),
                 'matched':  ", ".join(matched)
             })
 
@@ -4361,6 +4362,7 @@ async def search_keywords_local(keyword_str: str, days: int = None):
                     combined_rows.append(row[1:])
 
     results = []
+    _ch_link_cache: dict = {}   # source → kanal havolasi (takror so'rovsiz)
     for (s_id, s_name, s_un, text, msg_date, source) in combined_rows:
         search_text = (text or "").lower()
         matched = [kw for kw in keywords if kw in search_text]
@@ -4369,13 +4371,17 @@ async def search_keywords_local(keyword_str: str, days: int = None):
         display = text or ""
         if len(display) > 300:
             display = display[:297] + "..."
+        src = source or ""
+        if src not in _ch_link_cache:
+            _ch_link_cache[src] = await _get_cached_channel_link(src)
         results.append({
             'name':     s_name or "",
             'username': s_un   or "",
             'user_id':  s_id   or 0,
             'date':     msg_date or "",
             'text':     display,
-            'source':   source or "",
+            'source':   src,
+            'channel_link': _ch_link_cache[src],
             'matched':  ", ".join(matched)
         })
 
