@@ -4444,6 +4444,50 @@ def _make_channel_link(source: str) -> str:
     return ""
 
 
+async def _get_cached_channel_link(source: str) -> str:
+    """
+    Kanalning HAQIQIY havolasini keshdan oladi (API so'rovisiz).
+    resolved_channel_ids va hidden_channel_knocker bazasidan @username yoki
+    invite havola izlaydi. Topilmasa — _make_channel_link bilan fallback.
+    """
+    import database as db_mod
+    if not source:
+        return ""
+    s = source.strip()
+    # Manba allaqachon to'liq havola/username bo'lsa — keshdan izlamaymiz
+    if s.startswith('@') or 't.me/+' in s or 'joinchat/' in s:
+        return _make_channel_link(s)
+
+    # Raqamli ID — keshdan haqiqiy linkni izlaymiz
+    if s.lstrip('-').isdigit():
+        marked  = s if s.startswith('-100') else f"-100{s.lstrip('-')}"
+        abs_id  = s.lstrip('-')
+        try:
+            async with db_mod.connect(db_mod.DB_NAME, timeout=5) as db:
+                # 1. resolved_channel_ids — eng ishonchli kesh
+                async with db.execute(
+                    "SELECT channel_link FROM resolved_channel_ids "
+                    "WHERE numeric_id=? OR numeric_id=? LIMIT 1",
+                    (marked, abs_id)
+                ) as cur:
+                    row = await cur.fetchone()
+                if row and row[0] and str(row[0]).startswith('http'):
+                    return row[0]
+                # 2. hidden_channel_knocker — channel_id ba'zan invite havola
+                async with db.execute(
+                    "SELECT channel_id FROM hidden_channel_knocker "
+                    "WHERE numeric_id=? OR numeric_id=? LIMIT 1",
+                    (marked, abs_id)
+                ) as cur:
+                    row = await cur.fetchone()
+                if row and row[0] and str(row[0]).startswith('http'):
+                    return row[0]
+        except Exception as e:
+            _dbg("_get_cached_channel_link", e)
+    # Keshda yo'q — oddiy yasalgan havola
+    return _make_channel_link(s)
+
+
 async def lookup_channel_by_id(userbot, channel_id: int):
     """
     Kanal ID si bo'yicha kanal ma'lumotlari va havola qaytaradi.
@@ -5334,7 +5378,7 @@ async def check_message_alerts(msg_id: int, source: str, sender_id: int,
                 'text':        text[:300],
                 'date':        msg_date,
                 'link':        _make_msg_link(source, msg_id),
-                'channel_link': _make_channel_link(source),
+                'channel_link': await _get_cached_channel_link(source),
             })
     return hits
 
