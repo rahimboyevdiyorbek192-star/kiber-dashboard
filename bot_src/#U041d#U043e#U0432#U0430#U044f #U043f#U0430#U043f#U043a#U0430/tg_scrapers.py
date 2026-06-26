@@ -3384,14 +3384,16 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
             print(f"Progress saqlash xatosi: {e}")
 
     await asyncio.sleep(random.uniform(1.5, 3.0))
+    return audio_count[0]
 
 
 async def _music_process_one_source_slow(userbot, source, userbot_idx=0):
     """profile_slow flagini xavfsiz boshqaradi — try/finally har doim tiklaydi.
-    Musiqa skanerlash paytida profil tracker sekinlashadi (flood xavfi kamayadi)."""
+    Musiqa skanerlash paytida profil tracker sekinlashadi (flood xavfi kamayadi).
+    Qaytaradi: fingerprint qilingan musiqalar soni (None bo'lsa skanerlanmadi)."""
     _RESOURCE['profile_slow'] = True
     try:
-        await _music_process_one_source(userbot, source, userbot_idx)
+        return await _music_process_one_source(userbot, source, userbot_idx)
     finally:
         _RESOURCE['profile_slow'] = False
 
@@ -3504,15 +3506,24 @@ async def _secret_channel_queue_worker(all_bots):
         print(f"[SECRET-WORKER] UB{ub_idx_use+1} → maxfiy kanal skanerlanmoqda: {jc_name}")
         _CURRENT_SCAN_CHANNEL = jc_link
         try:
-            await _music_process_one_source_slow(ub, jc_link, ub_idx_use)
-            print(f"[SECRET-WORKER] Maxfiy kanal skaner tugadi: {jc_name}")
+            _scanned = await _music_process_one_source_slow(ub, jc_link, ub_idx_use)
+            print(f"[SECRET-WORKER] Maxfiy kanal skaner tugadi: {jc_name} ({_scanned})")
             if jc_bot and jc_adm:
                 try:
+                    if _scanned is None:
+                        _music_line = (
+                            "⚠️ Kanal hali ochilmagan yoki o'qib bo'lmadi — "
+                            "keyingi tsiklda qayta urinadi"
+                        )
+                    elif _scanned > 0:
+                        _music_line = f"🎵 `{_scanned}` ta musiqa fingerprint qilindi"
+                    else:
+                        _music_line = "🎵 Kanalda musiqa topilmadi"
                     await jc_bot.send_message(
                         jc_adm,
                         f"✅ **Maxfiy kanal skanerlandi!**\n\n"
                         f"📢 Kanal: `{jc_name}`\n"
-                        f"🎵 Barcha musiqalar fingerprint qilindi"
+                        f"{_music_line}"
                     )
                 except Exception as e:
                     _dbg("_secret_channel_queue_worker", e)
