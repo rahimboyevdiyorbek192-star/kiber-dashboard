@@ -32,7 +32,6 @@ async def init_music_db():
     global _DB_INITIALIZED
     if _DB_INITIALIZED:
         return
-    _DB_INITIALIZED = True
     async with db_mod.connect(MUSIC_DB, timeout=30) as db:
         await db.execute("PRAGMA journal_mode=WAL")
         await db.execute("PRAGMA synchronous=NORMAL")
@@ -80,6 +79,7 @@ async def init_music_db():
             "CREATE INDEX IF NOT EXISTS idx_mfp_channel ON music_fingerprints(channel_id)"
         )
         await db.commit()
+    _DB_INITIALIZED = True
 
 
 async def save_fingerprint(channel_id, channel_name, file_name, fingerprint, duration):
@@ -239,16 +239,17 @@ _LSH_BAND_WIDTH = 32  # bits per band = 1 uint32 element
 _lsh_index: "defaultdict[tuple, list]" = defaultdict(list)
 
 
-def build_lsh_index(fps_parsed_list):
+def build_lsh_index(fps_parsed_list, store_global=True):
     """
     LSH indeksini quriladi.
     fps_parsed_list: [(parsed_array, metadata), ...]
       metadata — ixtiyoriy, candidate ro'yxatida qaytariladi.
+    store_global=True bo'lsa global _lsh_index ga yoziladi (search_music uchun).
+    store_global=False bo'lsa faqat lokal indeks qaytariladi va global buzilmaydi.
     Band-based LSH: B=10 band, har band W=32 bit (1 uint32 element).
     Fingerprint uzunligi yetarli bo'lmasa mavjud elementlar ishlatiladi.
     """
-    global _lsh_index
-    _lsh_index = defaultdict(list)
+    index = defaultdict(list)
     for parsed_arr, metadata in fps_parsed_list:
         if _HAS_NUMPY:
             arr = parsed_arr if isinstance(parsed_arr, np.ndarray) else np.array(parsed_arr, dtype=np.uint32)
@@ -266,15 +267,22 @@ def build_lsh_index(fps_parsed_list):
             else:
                 band_val = tuple(arr[start:end])
             key = (band_idx, band_val)
-            _lsh_index[key].append((parsed_arr, metadata))
+            index[key].append((parsed_arr, metadata))
+    if store_global:
+        global _lsh_index
+        _lsh_index = index
+    return index
 
 
-def lsh_candidates(query_fp):
+def lsh_candidates(query_fp, index=None):
     """
     Query fingerprint uchun LSH kandidatlarini qaytaradi.
     query_fp: parsed array (np.ndarray yoki list).
+    index — berilmasa global _lsh_index ishlatiladi.
     Qaytaradi: (parsed_arr, metadata) juftliklari set'i (indeks bo'yicha).
     """
+    if index is None:
+        index = _lsh_index
     if _HAS_NUMPY:
         arr = query_fp if isinstance(query_fp, np.ndarray) else np.array(query_fp, dtype=np.uint32)
         length = len(arr)
@@ -294,7 +302,7 @@ def lsh_candidates(query_fp):
         else:
             band_val = tuple(arr[start:end])
         key = (band_idx, band_val)
-        for item in _lsh_index.get(key, []):
+        for item in index.get(key, []):
             item_id = id(item[0])
             if item_id not in seen_ids:
                 seen_ids.add(item_id)
@@ -338,12 +346,16 @@ def batch_compare_against_watches(watch_fps_parsed, all_fps_raw, threshold=0.65)
         except Exception:
             continue
 
-    # LSH indeksini DB fingerprintlari bo'yicha quriladi
-    build_lsh_index([(arr, (ch_id, ch_name, fname)) for ch_id, ch_name, fname, arr in db_parsed])
+    # LSH indeksini DB fingerprintlari bo'yicha quriladi (lokal — global _lsh_index
+    # buzilmaydi, chunki search_music undan 4-elementli metadata kutadi)
+    local_index = build_lsh_index(
+        [(arr, (ch_id, ch_name, fname)) for ch_id, ch_name, fname, arr in db_parsed],
+        store_global=False,
+    )
 
     for w_id, w_name, arr1 in watch_fps_parsed:
         # LSH orqali kandidatlar olish
-        candidates = lsh_candidates(arr1)
+        candidates = lsh_candidates(arr1, index=local_index)
         if candidates:
             for arr2, (ch_id, ch_name, fname) in candidates:
                 score = compare_fp_arrays(arr1, arr2)
