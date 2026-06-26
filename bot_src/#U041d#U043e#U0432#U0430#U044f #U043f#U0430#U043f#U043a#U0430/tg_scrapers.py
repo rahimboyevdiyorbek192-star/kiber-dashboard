@@ -4428,13 +4428,17 @@ async def lookup_channel_by_id(userbot, channel_id: int):
     """
     import database as db_mod
 
-    # 1. Lokal DB dan qidirish
-    abs_id = str(abs(channel_id))
+    # 1. Lokal DB dan qidirish.
+    # numeric_id bazada "-100XXXX" (marked) formatida saqlanadi (qarang: _notify_channel_joined,
+    # _pc_link_cached). Shu sabab marked formada ham, abs formada ham qidiramiz —
+    # aks holda DB kesh hech qachon mos kelmaydi va har safar API ga chiqib ketadi.
+    marked  = str(channel_id)          # masalan "-1001234567890"
+    abs_id  = str(abs(channel_id))     # masalan "1001234567890"
     async with db_mod.connect(db_mod.DB_NAME, timeout=15) as db:
         async with db.execute(
             "SELECT channel_id, numeric_id FROM hidden_channel_knocker "
-            "WHERE numeric_id=? OR channel_id=?",
-            (abs_id, str(channel_id))
+            "WHERE numeric_id=? OR numeric_id=? OR channel_id=?",
+            (marked, abs_id, marked)
         ) as cur:
             row = await cur.fetchone()
 
@@ -4445,8 +4449,8 @@ async def lookup_channel_by_id(userbot, channel_id: int):
     # 2. resolved_channel_ids dan
     async with db_mod.connect(db_mod.DB_NAME, timeout=15) as db:
         async with db.execute(
-            "SELECT channel_link FROM resolved_channel_ids WHERE numeric_id=?",
-            (abs_id,)
+            "SELECT channel_link FROM resolved_channel_ids WHERE numeric_id=? OR numeric_id=?",
+            (marked, abs_id)
         ) as cur:
             row2 = await cur.fetchone()
     if row2:
