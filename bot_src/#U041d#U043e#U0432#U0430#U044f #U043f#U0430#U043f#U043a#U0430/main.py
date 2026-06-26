@@ -3995,7 +3995,9 @@ async def process_alert_hits(hits: list):
     for hit in hits:
         try:
             un = f"@{hit['sender_name']}" if hit['sender_name'] else f"ID:{hit['sender_id']}"
-            link_part = f"\n🔗 {hit['link']}" if hit['link'] else ""
+            link_part = f"\n🔗 Xabar: {hit['link']}" if hit['link'] else ""
+            ch_link = hit.get('channel_link', '')
+            chan_part = f"\n📢 Kanal: {ch_link}" if ch_link else ""
             text = (
                 f"🚨 **ALERT ISHLADI!**\n"
                 f"🔑 Kalit so'z: `{hit['keyword']}`\n"
@@ -4003,6 +4005,7 @@ async def process_alert_hits(hits: list):
                 f"👤 Kim: {un}\n"
                 f"📅 Sana: {hit['date']}\n\n"
                 f"💬 {hit['text'][:300]}"
+                f"{chan_part}"
                 f"{link_part}"
             )
             await bot.send_message(hit['admin_id'], text, link_preview=False)

@@ -4421,6 +4421,29 @@ def _make_msg_link(source: str, msg_id: int) -> str:
     return ""
 
 
+def _make_channel_link(source: str) -> str:
+    """Kanalning o'ziga (xabarga emas) ochiladigan havola yaratish."""
+    if not source:
+        return ""
+    s = source.strip()
+    # Invite havola — o'zini qaytaramiz
+    if 't.me/+' in s or 'joinchat/' in s:
+        return s
+    # t.me/username
+    if 't.me/' in s:
+        uname = s.split('t.me/')[-1].split('/')[0].rstrip('/')
+        if uname and not uname.startswith('c'):
+            return f"https://t.me/{uname}"
+    if s.startswith('@'):
+        return f"https://t.me/{s[1:]}"
+    # Raqamli kanal ID (-100XXXX)
+    if s.lstrip('-').isdigit():
+        num = abs(int(s))
+        if num > 1000000000:
+            return f"https://t.me/c/{num}"
+    return ""
+
+
 async def lookup_channel_by_id(userbot, channel_id: int):
     """
     Kanal ID si bo'yicha kanal ma'lumotlari va havola qaytaradi.
@@ -5311,6 +5334,7 @@ async def check_message_alerts(msg_id: int, source: str, sender_id: int,
                 'text':        text[:300],
                 'date':        msg_date,
                 'link':        _make_msg_link(source, msg_id),
+                'channel_link': _make_channel_link(source),
             })
     return hits
 
