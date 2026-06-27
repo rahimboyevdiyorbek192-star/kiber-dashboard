@@ -3999,7 +3999,12 @@ async def process_alert_hits(hits: list):
         try:
             un = f"@{hit['sender_name']}" if hit['sender_name'] else f"ID:{hit['sender_id']}"
             link_part = f"\n🔗 Xabar: {hit['link']}" if hit['link'] else ""
+            # Kiriladigan havola: avval kesh, kerak bo'lsa userbot orqali API'dan
             ch_link = hit.get('channel_link', '')
+            try:
+                ch_link = await engine.resolve_join_link(userbot, hit['source']) or ch_link
+            except Exception as e:
+                engine._dbg("main.process_alert_hits.joinlink", e)
             chan_part = f"\n📢 Kanal: {ch_link}" if ch_link else ""
             text = (
                 f"🚨 **ALERT ISHLADI!**\n"
