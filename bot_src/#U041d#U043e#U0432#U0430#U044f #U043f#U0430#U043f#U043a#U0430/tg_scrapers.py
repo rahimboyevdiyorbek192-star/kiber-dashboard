@@ -4407,6 +4407,19 @@ async def get_cache_stats():
 # ID BO'YICHA QIDIRUV
 # ─────────────────────────────────────────────────────────────────────
 
+def _cid_for_clink(source) -> str:
+    """
+    Marked kanal ID (-100XXXX) dan t.me/c uchun ICHKI id ni ajratadi.
+    Telegram t.me/c/<cid> havolasi '-100' prefiksisiz id ishlatadi
+    (qarang: safe_get_entity 'int(f"-100{cid}")' va _save_pc_id_to_cache).
+    Masalan: -1003885009906 → 3885009906
+    """
+    s = str(source).strip().lstrip('-')   # "1003885009906"
+    if s.startswith('100') and len(s) > 10:
+        return s[3:]                       # "3885009906"
+    return s
+
+
 def _make_msg_link(source: str, msg_id: int) -> str:
     """Xabar havolasini yaratish."""
     if not source or not msg_id:
@@ -4423,7 +4436,7 @@ def _make_msg_link(source: str, msg_id: int) -> str:
     if s.lstrip('-').isdigit():
         num = abs(int(s))
         if num > 1000000000:
-            return f"https://t.me/c/{num}/{msg_id}"
+            return f"https://t.me/c/{_cid_for_clink(s)}/{msg_id}"
     return ""
 
 
@@ -4451,7 +4464,7 @@ def _make_channel_link(source: str) -> str:
     if s.lstrip('-').isdigit():
         num = abs(int(s))
         if num > 1000000000:
-            return f"https://t.me/c/{num}"
+            return f"https://t.me/c/{_cid_for_clink(s)}"
     return ""
 
 
@@ -4560,7 +4573,7 @@ async def lookup_channel_by_id(userbot, channel_id: int):
         if uname:
             link = f"https://t.me/{uname}"
         else:
-            link = f"https://t.me/c/{abs(channel_id)}"
+            link = f"https://t.me/c/{_cid_for_clink(channel_id)}"
         return {'title': title, 'username': uname, 'members': members}, link
     except Exception:
         return None, None
