@@ -4482,106 +4482,77 @@ async def _get_cached_channel_link(source: str) -> str:
     if s.startswith('@') or 't.me/+' in s or 'joinchat/' in s:
         return _make_channel_link(s)
 
-    # Raqamli ID — keshdan haqiqiy linkni izlaymiz
+    # Raqamli ID — keshdan haqiqiy (kiriladigan) linkni izlaymiz.
+    # Userbot bu kanalga keshdagi invite havola orqali kirgan, shuning uchun
+    # o'sha invite havola bazada SAQLANGAN — API kerak emas. U 3 joyda bo'lishi
+    # mumkin: resolved_channel_ids, hidden_channel_knocker.channel_id, va
+    # users_memory_bank.has_hidden/bio (kanal egasi — creator_id orqali).
     if s.lstrip('-').isdigit():
         marked  = s if s.startswith('-100') else f"-100{s.lstrip('-')}"
         abs_id  = s.lstrip('-')
         candidates = []
         try:
             async with db_mod.connect(db_mod.DB_NAME, timeout=5) as db:
-                # resolved_channel_ids — barcha mos satrlar
+                # 1. resolved_channel_ids
                 async with db.execute(
                     "SELECT channel_link FROM resolved_channel_ids "
                     "WHERE numeric_id=? OR numeric_id=?",
                     (marked, abs_id)
                 ) as cur:
                     candidates += [r[0] for r in await cur.fetchall() if r and r[0]]
-                # hidden_channel_knocker — channel_id ba'zan invite havola
+                # 2. hidden_channel_knocker — channel_id (invite) + creator_id
+                creator_ids = []
                 async with db.execute(
-                    "SELECT channel_id FROM hidden_channel_knocker "
+                    "SELECT channel_id, creator_id FROM hidden_channel_knocker "
                     "WHERE numeric_id=? OR numeric_id=?",
                     (marked, abs_id)
                 ) as cur:
-                    candidates += [r[0] for r in await cur.fetchall() if r and r[0]]
+                    for ch_id_v, cr in await cur.fetchall():
+                        if ch_id_v:
+                            candidates.append(ch_id_v)
+                        if cr:
+                            creator_ids.append(cr)
+                # 3. kanal egasining has_hidden/bio dagi invite havolasi
+                if creator_ids:
+                    ph = ",".join("?" * len(creator_ids))
+                    async with db.execute(
+                        f"SELECT has_hidden, bio FROM users_memory_bank "
+                        f"WHERE user_id IN ({ph})",
+                        creator_ids
+                    ) as cur:
+                        for hh, bio in await cur.fetchall():
+                            if hh:
+                                candidates.append(hh)
+                            if bio:
+                                candidates += extract_invite_links(bio)
         except Exception as e:
             _dbg("_get_cached_channel_link", e)
 
         # Eng foydali havolani tanlaymiz:
-        #  1) @username yoki +invite (to'g'ridan-to'g'ri ochiladi)
-        #  2) t.me/c/<id> (faqat a'zoga ochiladi)
-        invite_or_uname = ""
+        #  1) +invite (t.me/+ — kanalga kirish so'rovi yuboriladi)
+        #  2) @username / t.me/username (ochiq kanal)
+        #  3) t.me/c/<id> (faqat a'zoga ochiladi)
+        invite = ""
+        uname = ""
         c_link = ""
         for cl in candidates:
-            cl = str(cl)
-            if not cl.startswith('http'):
-                continue
-            if '/c/' in cl:
+            cl = str(cl).strip()
+            if 't.me/+' in cl or 'joinchat/' in cl:
+                invite = invite or (cl if cl.startswith('http') else f"https://{cl[cl.find('t.me/'):]}")
+            elif cl.startswith('@'):
+                uname = uname or f"https://t.me/{cl[1:]}"
+            elif cl.startswith('http') and '/c/' not in cl:
+                uname = uname or cl
+            elif cl.startswith('http'):
                 c_link = c_link or cl
-            else:
-                invite_or_uname = invite_or_uname or cl
-        if invite_or_uname:
-            return invite_or_uname
+        if invite:
+            return invite
+        if uname:
+            return uname
         if c_link:
             return c_link
     # Keshda haqiqiy havola yo'q — raqamli ID dan yasalgan t.me/c havola
     return _make_channel_link(s)
-
-
-async def resolve_join_link(userbot, source: str) -> str:
-    """
-    KIRILADIGAN havola qaytaradi (@username yoki t.me/+invite).
-    1. Avval keshdan (API'siz).
-    2. Keshda yo'q bo'lsa — userbot orqali API'dan:
-       @username bo'lsa → t.me/username,
-       bo'lmasa        → kanalning eksport invite havolasi (a'zo userbot oladi).
-    3. Hech narsa bo'lmasa — t.me/c (faqat a'zoga ochiladi) fallback.
-    Topilgan haqiqiy havola keshga saqlanadi — keyingi safar API chaqirilmaydi.
-    """
-    cached = await _get_cached_channel_link(source)
-    # Kesh kiriladigan havola bergan bo'lsa (t.me/c emas) — shuni qaytaramiz
-    if cached and '/c/' not in cached:
-        return cached
-
-    s = str(source).strip()
-    if not s.lstrip('-').isdigit():
-        return cached  # raqamli ID emas — API qila olmaymiz
-
-    join_link = ""
-    try:
-        ch_id_int = int(s) if s.startswith('-') else int(f"-100{_cid_for_clink(s)}")
-        entity = await safe_get_entity(userbot, ch_id_int)
-        if entity is not None:
-            uname = getattr(entity, 'username', None)
-            if uname:
-                join_link = f"https://t.me/{uname}"
-            else:
-                try:
-                    full_ch = await userbot(GetFullChannelRequest(entity))
-                    inv = getattr(full_ch.full_chat, 'exported_invite', None)
-                    if inv and getattr(inv, 'link', None):
-                        join_link = inv.link
-                except Exception as e:
-                    _dbg("resolve_join_link.full", e)
-    except Exception as e:
-        _dbg("resolve_join_link", e)
-
-    if join_link:
-        # Keshga saqlaymiz — keyingi safar API'siz olinadi
-        try:
-            marked = s if s.startswith('-100') else f"-100{_cid_for_clink(s)}"
-            now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-            async with db_mod.connect(db_mod.DB_NAME, timeout=10) as _db:
-                await _db.execute(
-                    "INSERT OR REPLACE INTO resolved_channel_ids "
-                    "(channel_link, numeric_id, resolved_at) VALUES (?, ?, ?)",
-                    (join_link, marked, now_str)
-                )
-                await _db.commit()
-        except Exception as e:
-            _dbg("resolve_join_link.cache", e)
-        return join_link
-
-    return cached  # API ham bera olmadi — t.me/c fallback
 
 
 async def lookup_channel_by_id(userbot, channel_id: int):
