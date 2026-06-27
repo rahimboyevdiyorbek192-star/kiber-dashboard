@@ -4435,10 +4435,15 @@ def _make_channel_link(source: str) -> str:
     # Invite havola — o'zini qaytaramiz
     if 't.me/+' in s or 'joinchat/' in s:
         return s
-    # t.me/username
+    # t.me/c/<id> — maxfiy kanal raqamli havolasi (o'zini qaytaramiz)
+    if 't.me/c/' in s:
+        cpart = s.split('t.me/c/')[-1].split('/')[0]
+        if cpart.isdigit():
+            return f"https://t.me/c/{cpart}"
+    # t.me/username (c/ dan keyin emas)
     if 't.me/' in s:
         uname = s.split('t.me/')[-1].split('/')[0].rstrip('/')
-        if uname and not uname.startswith('c'):
+        if uname and uname != 'c':
             return f"https://t.me/{uname}"
     if s.startswith('@'):
         return f"https://t.me/{s[1:]}"
