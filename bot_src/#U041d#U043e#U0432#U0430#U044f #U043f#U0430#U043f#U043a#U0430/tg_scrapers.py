@@ -4468,29 +4468,44 @@ async def _get_cached_channel_link(source: str) -> str:
     if s.lstrip('-').isdigit():
         marked  = s if s.startswith('-100') else f"-100{s.lstrip('-')}"
         abs_id  = s.lstrip('-')
+        candidates = []
         try:
             async with db_mod.connect(db_mod.DB_NAME, timeout=5) as db:
-                # 1. resolved_channel_ids — eng ishonchli kesh
+                # resolved_channel_ids — barcha mos satrlar
                 async with db.execute(
                     "SELECT channel_link FROM resolved_channel_ids "
-                    "WHERE numeric_id=? OR numeric_id=? LIMIT 1",
+                    "WHERE numeric_id=? OR numeric_id=?",
                     (marked, abs_id)
                 ) as cur:
-                    row = await cur.fetchone()
-                if row and row[0] and str(row[0]).startswith('http'):
-                    return row[0]
-                # 2. hidden_channel_knocker — channel_id ba'zan invite havola
+                    candidates += [r[0] for r in await cur.fetchall() if r and r[0]]
+                # hidden_channel_knocker — channel_id ba'zan invite havola
                 async with db.execute(
                     "SELECT channel_id FROM hidden_channel_knocker "
-                    "WHERE numeric_id=? OR numeric_id=? LIMIT 1",
+                    "WHERE numeric_id=? OR numeric_id=?",
                     (marked, abs_id)
                 ) as cur:
-                    row = await cur.fetchone()
-                if row and row[0] and str(row[0]).startswith('http'):
-                    return row[0]
+                    candidates += [r[0] for r in await cur.fetchall() if r and r[0]]
         except Exception as e:
             _dbg("_get_cached_channel_link", e)
-    # Keshda yo'q — oddiy yasalgan havola
+
+        # Eng foydali havolani tanlaymiz:
+        #  1) @username yoki +invite (to'g'ridan-to'g'ri ochiladi)
+        #  2) t.me/c/<id> (faqat a'zoga ochiladi)
+        invite_or_uname = ""
+        c_link = ""
+        for cl in candidates:
+            cl = str(cl)
+            if not cl.startswith('http'):
+                continue
+            if '/c/' in cl:
+                c_link = c_link or cl
+            else:
+                invite_or_uname = invite_or_uname or cl
+        if invite_or_uname:
+            return invite_or_uname
+        if c_link:
+            return c_link
+    # Keshda haqiqiy havola yo'q — raqamli ID dan yasalgan t.me/c havola
     return _make_channel_link(s)
 
 
