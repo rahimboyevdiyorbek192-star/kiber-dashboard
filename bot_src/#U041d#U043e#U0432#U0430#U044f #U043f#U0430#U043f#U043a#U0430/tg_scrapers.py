@@ -4549,9 +4549,11 @@ async def _get_cached_channel_link(source: str) -> str:
             return invite
         if uname:
             return uname
-        if c_link:
-            return c_link
-    # Keshda haqiqiy havola yo'q — raqamli ID dan yasalgan t.me/c havola
+        # Raqamli ID uchun haqiqiy (kiriladigan) havola topilmasa — bo'sh qaytaramiz.
+        # Userbot kanalga invite orqali kirgani uchun amalda bu yerga yetib kelinmaydi;
+        # t.me/c kiriladigan havola emas, shuning uchun uni ko'rsatmaymiz.
+        return ""
+    # Raqamli ID emas (username/invite) — to'g'ridan-to'g'ri yasaymiz
     return _make_channel_link(s)
 
 
