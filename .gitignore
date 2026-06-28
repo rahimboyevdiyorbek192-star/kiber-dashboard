@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+.claude/
+bot_src.zip
